@@ -101,7 +101,7 @@ local config = {
     aggression     = 20,
     minLength      = 3,
     maxLength      = 12,
-    filterEnding   = "semua",
+    filterEnding   = {},        -- table huruf akhiran, kosong = semua
     antiDetectMode = true,
     preferRare     = false,
 }
@@ -209,7 +209,17 @@ end
 local function getSmartWords(prefix)
     local results     = {}
     local lowerPrefix = string.lower(prefix)
-    local filterEnd   = string.lower(config.filterEnding)
+
+    -- Buat set huruf akhiran yang dipilih untuk lookup cepat
+    local filterSet = {}
+    local hasFilter = false
+    for _, v in ipairs(config.filterEnding) do
+        local lv = string.lower(tostring(v))
+        if lv ~= "semua" and lv ~= "" then
+            filterSet[lv] = true
+            hasFilter = true
+        end
+    end
 
     for i = 1, #kataModule do
         local word = kataModule[i]
@@ -217,8 +227,9 @@ local function getSmartWords(prefix)
             local len = string.len(word)
             if len >= config.minLength and len <= config.maxLength then
                 local passFilter = true
-                if filterEnd ~= "semua" and filterEnd ~= "" then
-                    if string.sub(word, -1) ~= filterEnd then
+                if hasFilter then
+                    local wordEnd = string.sub(word, -1)
+                    if not filterSet[wordEnd] then
                         passFilter = false
                     end
                 end
@@ -251,9 +262,10 @@ local function startUltraAI()
 
     local words = getSmartWords(serverLetter)
     if #words == 0 then
-        if config.filterEnding ~= "semua" then
+        -- Fallback: coba tanpa filter akhiran
+        if #config.filterEnding > 0 then
             local oldFilter = config.filterEnding
-            config.filterEnding = "semua"
+            config.filterEnding = {}
             words = getSmartWords(serverLetter)
             config.filterEnding = oldFilter
         end
@@ -376,22 +388,68 @@ MainTab:CreateSection("🔚 FILTER AKHIRAN HURUF")
 MainTab:CreateParagraph({
     Title   = "ℹ Cara Kerja Filter",
     Content =
-        "Pilih huruf akhiran untuk memaksa AI memilih kata berakhiran huruf tersebut.\n" ..
-        "Pilih 'Semua' untuk menonaktifkan filter.\n" ..
-        "Jika tidak ada kata, AI otomatis fallback ke semua kata."
+        "Pilih BEBERAPA huruf akhiran sekaligus.\n" ..
+        "AI akan pilih kata berakhiran salah satu dari huruf yang dipilih.\n" ..
+        "Kosongkan pilihan = tidak ada filter (semua kata boleh).\n" ..
+        "💡 Rekomendasi Trap: pilih x, q, z, f, v"
 })
 
+local filterLabel = MainTab:CreateLabel("🔚 Filter aktif: (tidak ada — semua kata boleh)")
+
 MainTab:CreateDropdown({
-    Name            = "🔚 Pilih Akhiran Huruf",
-    Options         = {"Semua","a","i","u","e","o","n","r","s","t","k","h","l","m","p","g","j","f","v","z","x","q","w","y"},
-    CurrentOption   = {"Semua"},
-    MultipleOptions = false,
+    Name            = "🔚 Pilih Akhiran Huruf (bisa lebih dari satu)",
+    Options         = {"a","i","u","e","o","n","r","s","t","k","h","l","m","p","g","j","f","v","z","x","q","w","y"},
+    CurrentOption   = {},
+    MultipleOptions = true,
     Callback        = function(Value)
-        local v = type(Value) == "table" and Value[1] or Value
-        config.filterEnding = string.lower(tostring(v or "semua"))
+        -- Value adalah table berisi huruf-huruf yang dipilih
+        local selected = {}
+        if type(Value) == "table" then
+            for _, v in ipairs(Value) do
+                table.insert(selected, string.lower(tostring(v)))
+            end
+        end
+        config.filterEnding = selected
+
+        -- Update label info
+        if #selected == 0 then
+            pcall(function() filterLabel:Set("🔚 Filter aktif: (tidak ada — semua kata boleh)") end)
+        else
+            local display = table.concat(selected, ", ")
+            pcall(function() filterLabel:Set("🔚 Filter aktif: " .. display) end)
+            Rayfield:Notify({
+                Title    = "🔚 Filter Akhiran",
+                Content  = "Filter: " .. display,
+                Duration = 3,
+                Image    = 4483362458
+            })
+        end
+    end
+})
+
+-- Tombol preset trap letter
+MainTab:CreateButton({
+    Name     = "💀 Preset TRAP (x, q, z, f, v)",
+    Callback = function()
+        config.filterEnding = {"x", "q", "z", "f", "v"}
+        pcall(function() filterLabel:Set("🔚 Filter aktif: x, q, z, f, v  💀 TRAP MODE") end)
         Rayfield:Notify({
-            Title    = "🔚 Filter Akhiran",
-            Content  = "Diset ke: " .. tostring(v),
+            Title    = "💀 TRAP MODE",
+            Content  = "Filter akhiran diset ke: x, q, z, f, v\nLawan akan kesulitan!",
+            Duration = 4,
+            Image    = 4483362458
+        })
+    end
+})
+
+MainTab:CreateButton({
+    Name     = "🔄 Reset Filter (semua kata)",
+    Callback = function()
+        config.filterEnding = {}
+        pcall(function() filterLabel:Set("🔚 Filter aktif: (tidak ada — semua kata boleh)") end)
+        Rayfield:Notify({
+            Title    = "🔄 Filter Reset",
+            Content  = "Filter akhiran dihapus",
             Duration = 3,
             Image    = 4483362458
         })
