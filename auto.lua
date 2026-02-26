@@ -56,6 +56,7 @@ local state = {
     loopReplay   = false,
     recordThread = nil,
     replayThread = nil,
+    replayConn   = nil,         -- Heartbeat connection
     pathParts    = {},          -- part visual path
 }
 
@@ -267,7 +268,64 @@ local function stopRecording()
 end
 
 -- =========================
--- REPLAY SYSTEM
+-- SMOOTH INTERPOLATION HELPERS
+-- Catmull-Rom spline untuk gerakan super smooth
+-- =========================
+local function catmullRom(p0, p1, p2, p3, t)
+    local t2 = t * t
+    local t3 = t2 * t
+    return 0.5 * (
+        (2 * p1) +
+        (-p0 + p2) * t +
+        (2*p0 - 5*p1 + 4*p2 - p3) * t2 +
+        (-p0 + 3*p1 - 3*p2 + p3) * t3
+    )
+end
+
+local function findFrameAtTime(frames, targetTime)
+    local lo, hi = 1, #frames - 1
+    while lo < hi do
+        local mid = math.floor((lo + hi) / 2)
+        if frames[mid].time < targetTime then lo = mid + 1
+        else hi = mid end
+    end
+    return math.max(1, lo - 1)
+end
+
+local function samplePosition(frames, t)
+    if #frames == 0 then return Vector3.zero end
+    if #frames == 1 then return frames[1].pos end
+    local totalTime = frames[#frames].time
+    t = math.clamp(t, 0, totalTime)
+    local i  = findFrameAtTime(frames, t)
+    i = math.clamp(i, 1, #frames - 1)
+    local f0 = frames[math.max(1,       i-1)]
+    local f1 = frames[i]
+    local f2 = frames[math.min(#frames, i+1)]
+    local f3 = frames[math.min(#frames, i+2)]
+    local segDur = f2.time - f1.time
+    local alpha  = segDur > 0 and math.clamp((t - f1.time) / segDur, 0, 1) or 0
+    local smooth = alpha * alpha * (3 - 2 * alpha)  -- smoothstep
+    return catmullRom(f0.pos, f1.pos, f2.pos, f3.pos, smooth)
+end
+
+local function sampleSpeed(frames, t)
+    if #frames == 0 then return 16 end
+    local totalTime = frames[#frames].time
+    t = math.clamp(t, 0, totalTime)
+    local i  = findFrameAtTime(frames, t)
+    i = math.clamp(i, 1, #frames - 1)
+    local f1 = frames[i]
+    local f2 = frames[math.min(#frames, i+1)]
+    local segDur = f2.time - f1.time
+    local alpha  = segDur > 0 and math.clamp((t - f1.time) / segDur, 0, 1) or 0
+    return math.clamp(f1.speed + (f2.speed - f1.speed) * alpha, 0, 100)
+end
+
+-- =========================
+-- REPLAY SYSTEM — SMOOTH HEARTBEAT
+-- RunService.Heartbeat = update tiap frame (60fps+)
+-- Catmull-Rom = posisi mulus tanpa patah-patah
 -- =========================
 local function startReplay()
     if state.isReplaying then return end
@@ -285,6 +343,25 @@ local function startReplay()
     state.isReplaying = true
     drawPath(state.currentSlot)
 
+    local totalTime   = frames[#frames].time
+    local playTime    = 0
+    local origSpeed   = Humanoid.WalkSpeed
+    local lastLookDir = Vector3.new(0, 0, -1)
+    local LOOK_AHEAD  = 0.08  -- detik look-ahead untuk arah hadap
+
+    -- Nonaktifkan kontrol keyboard player saat replay
+    local function disableControl()
+        pcall(function()
+            LocalPlayer.DevComputerMovementMode = Enum.DevComputerMovementMode.Disabled
+        end)
+    end
+    local function enableControl()
+        pcall(function()
+            LocalPlayer.DevComputerMovementMode = Enum.DevComputerMovementMode.UserChoice
+        end)
+    end
+    disableControl()
+
     Rayfield:Notify({
         Title   = "▶ Replay Dimulai!",
         Content = "Slot " .. state.currentSlot .. " — Speed: " .. state.replaySpeed .. "x\nTekan [X] untuk stop",
@@ -292,85 +369,100 @@ local function startReplay()
         Image   = 4483362458
     })
 
-    state.replayThread = task.spawn(function()
-        repeat
-            local startTime = tick()
+    -- ── Heartbeat: update tiap frame ─────────────────────
+    local heartbeatConn
+    heartbeatConn = RunService.Heartbeat:Connect(function(dt)
+        if not state.isReplaying then
+            heartbeatConn:Disconnect()
+            enableControl()
+            Humanoid.WalkSpeed = origSpeed
+            pcall(function() Humanoid:Move(Vector3.zero, false) end)
+            return
+        end
 
-            for i = 1, #frames do
-                if not state.isReplaying then break end
+        if not (RootPart and RootPart.Parent and Humanoid and Humanoid.Parent) then return end
 
-                local frame    = frames[i]
-                local nextFrame = frames[i + 1]
+        -- Maju waktu
+        playTime = playTime + dt * state.replaySpeed
 
-                -- Pindahkan karakter ke posisi frame
-                if RootPart and RootPart.Parent then
-                    -- Hitung arah jalan
-                    if nextFrame then
-                        local dir = (nextFrame.pos - frame.pos)
-                        if dir.Magnitude > 0.01 then
-                            Humanoid:Move(dir.Unit, false)
-                        end
-                    end
-
-                    -- Teleport halus dengan CFrame
-                    local targetCF = CFrame.new(frame.pos)
-                    if nextFrame then
-                        local lookDir = nextFrame.pos - frame.pos
-                        if lookDir.Magnitude > 0.01 then
-                            targetCF = CFrame.lookAt(frame.pos, frame.pos + lookDir)
-                        end
-                    end
-                    RootPart.CFrame = targetCF
-                end
-
-                -- Hitung delay ke frame berikutnya
-                local delay = RECORD_INTERVAL / state.replaySpeed
-                if nextFrame then
-                    delay = (nextFrame.time - frame.time) / state.replaySpeed
-                end
-                if delay < 0.01 then delay = 0.01 end
-
-                task.wait(delay)
+        -- Selesai?
+        if playTime >= totalTime then
+            if state.loopReplay then
+                playTime = playTime % totalTime
+            else
+                -- Posisi terakhir
+                local endPos = frames[#frames].pos
+                local endCF  = CFrame.lookAt(endPos, endPos + lastLookDir)
+                RootPart.CFrame    = endCF
+                Humanoid.WalkSpeed = origSpeed
+                state.isReplaying  = false
+                heartbeatConn:Disconnect()
+                enableControl()
+                pcall(function() Humanoid:Move(Vector3.zero, false) end)
+                updateStatusUI()
+                Rayfield:Notify({
+                    Title   = "⏹ Replay Selesai",
+                    Content = "Slot " .. state.currentSlot .. " selesai diputar",
+                    Duration = 3,
+                    Image   = 4483362458
+                })
+                return
             end
+        end
 
-            -- Stop humanoid setelah selesai
-            if Humanoid and Humanoid.Parent then
-                Humanoid:Move(Vector3.zero, false)
-            end
+        -- Sample posisi sekarang dan sedikit ke depan (look-ahead)
+        local currentPos = samplePosition(frames, playTime)
+        local aheadPos   = samplePosition(frames, math.min(totalTime, playTime + LOOK_AHEAD))
 
-            if not state.loopReplay then break end
-            task.wait(0.3)
+        -- Hitung arah hadap smooth
+        local lookDir = aheadPos - currentPos
+        if lookDir.Magnitude > 0.001 then
+            -- Lerp arah agar tidak tiba-tiba berputar
+            lastLookDir = lastLookDir:Lerp(lookDir.Unit, math.min(1, dt * 18))
+            if lastLookDir.Magnitude < 0.001 then lastLookDir = lookDir.Unit end
+        end
 
-        until not state.isReplaying or not state.loopReplay
+        -- Bangun CFrame: posisi Catmull-Rom + rotasi smooth
+        local up        = Vector3.new(0, 1, 0)
+        local lookFlat  = Vector3.new(lastLookDir.X, 0, lastLookDir.Z)
+        if lookFlat.Magnitude < 0.001 then lookFlat = Vector3.new(0, 0, -1) end
+        local targetCF  = CFrame.lookAt(currentPos, currentPos + lookFlat)
 
-        state.isReplaying = false
-        updateStatusUI()
+        -- Apply langsung — 60fps Heartbeat sudah sangat smooth
+        RootPart.CFrame = targetCF
 
-        if state.loopReplay then
-            -- Loop dimatikan dari luar
-        else
-            Rayfield:Notify({
-                Title   = "⏹ Replay Selesai",
-                Content = "Slot " .. state.currentSlot .. " selesai diputar",
-                Duration = 3,
-                Image   = 4483362458
-            })
+        -- WalkSpeed mengikuti kecepatan rekaman asli
+        local recordedSpeed = sampleSpeed(frames, playTime)
+        Humanoid.WalkSpeed  = math.clamp(recordedSpeed * state.replaySpeed, 1, 80)
+
+        -- Trigger animasi jalan
+        if lookFlat.Magnitude > 0.001 then
+            Humanoid:Move(lookFlat.Unit, false)
         end
     end)
 
+    state.replayConn   = heartbeatConn
+    state.replayThread = nil
     updateStatusUI()
 end
 
 local function stopReplay()
     if not state.isReplaying then return end
     state.isReplaying = false
+    -- Putus Heartbeat connection
+    if state.replayConn then
+        pcall(function() state.replayConn:Disconnect() end)
+        state.replayConn = nil
+    end
     if state.replayThread then
-        task.cancel(state.replayThread)
+        pcall(function() task.cancel(state.replayThread) end)
         state.replayThread = nil
     end
-    if Humanoid and Humanoid.Parent then
-        Humanoid:Move(Vector3.zero, false)
-    end
+    -- Kembalikan kontrol player
+    pcall(function()
+        LocalPlayer.DevComputerMovementMode = Enum.DevComputerMovementMode.UserChoice
+    end)
+    pcall(function() Humanoid:Move(Vector3.zero, false) end)
     updateStatusUI()
     Rayfield:Notify({ Title="⏹ Replay Dihentikan", Content="", Duration=2, Image=4483362458 })
 end
