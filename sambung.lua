@@ -514,23 +514,20 @@ local StatsTab = Window:CreateTab("📊 STATISTIK", 4483362458)
 
 StatsTab:CreateSection("🏆 STATISTIK SESI")
 
-local statsParagraph = StatsTab:CreateParagraph({
-    Title   = "📈 Performa Sesi Ini",
-    Content = "⏳ Belum ada data..."
-})
+-- 3 Label terpisah per stat agar Set() pasti bekerja di Rayfield
+local labelKataDikirim = StatsTab:CreateLabel("🔤 Kata Dikirim    : 0")
+local labelKataPanjang = StatsTab:CreateLabel("🏆 Kata Terpanjang : —")
+local labelDurasi      = StatsTab:CreateLabel("⏱ Durasi Sesi     : 0m 0s")
 
--- updateStatsParagraph: safeSet sudah terdefinisi di atas
 local function updateStatsParagraph()
     local elapsed        = os.time() - (stats.sessionStart or os.time())
     local minutes        = math.floor(elapsed / 60)
     local seconds        = elapsed % 60
     local longest        = tostring(stats.longestWord or "")
     local displayLongest = (longest ~= "") and longest or "—"
-    local content =
-        "🔤 Kata Dikirim    : " .. tostring(stats.totalWords or 0) .. "\n" ..
-        "🏆 Kata Terpanjang : " .. displayLongest .. "\n" ..
-        "⏱ Durasi Sesi     : " .. tostring(minutes) .. "m " .. tostring(seconds) .. "s"
-    safeSet(statsParagraph, content)
+    pcall(function() labelKataDikirim:Set("🔤 Kata Dikirim    : " .. tostring(stats.totalWords or 0)) end)
+    pcall(function() labelKataPanjang:Set("🏆 Kata Terpanjang : " .. displayLongest) end)
+    pcall(function() labelDurasi:Set("⏱ Durasi Sesi     : " .. tostring(minutes) .. "m " .. tostring(seconds) .. "s") end)
 end
 
 StatsTab:CreateButton({
@@ -587,20 +584,9 @@ StatsTab:CreateButton({
 
 StatsTab:CreateSection("🎯 STATUS PERTANDINGAN")
 
-local opponentParagraph = StatsTab:CreateParagraph({
-    Title   = "👤 Status Lawan",
-    Content = "⏳ Menunggu pertandingan..."
-})
-
-local startLetterParagraph = StatsTab:CreateParagraph({
-    Title   = "🔤 Huruf Awal Server",
-    Content = "—"
-})
-
-local turnParagraph = StatsTab:CreateParagraph({
-    Title   = "🎮 Giliran",
-    Content = "⏳ Menunggu..."
-})
+local opponentParagraph    = StatsTab:CreateLabel("👤 Status Lawan: ⏳ Menunggu pertandingan...")
+local startLetterParagraph = StatsTab:CreateLabel("🔤 Huruf Awal Server: —")
+local turnParagraph        = StatsTab:CreateLabel("🎮 Giliran: ⏳ Menunggu...")
 
 -- ==============================
 -- TAB 5: TENTANG
@@ -667,8 +653,8 @@ local function onMatchUI(cmd, value)
         matchActive = true
         isMyTurn    = false
         resetUsedWords()
-        safeSet(turnParagraph,     "⏳ Menunggu giliran...")
-        safeSet(opponentParagraph, "👀 Pertandingan dimulai!")
+        safeSet(turnParagraph,     "🎮 Giliran: ⏳ Menunggu giliran...")
+        safeSet(opponentParagraph, "👤 Status Lawan: 👀 Pertandingan dimulai!")
         updateStatsParagraph()
 
     elseif cmd == "HideMatchUI" then
@@ -676,14 +662,14 @@ local function onMatchUI(cmd, value)
         isMyTurn     = false
         serverLetter = ""
         resetUsedWords()
-        safeSet(turnParagraph,        "❌ Pertandingan selesai")
-        safeSet(opponentParagraph,    "⏳ Menunggu pertandingan...")
-        safeSet(startLetterParagraph, "Huruf: —")
+        safeSet(turnParagraph,        "🎮 Giliran: ❌ Pertandingan selesai")
+        safeSet(opponentParagraph,    "👤 Status Lawan: ⏳ Menunggu pertandingan...")
+        safeSet(startLetterParagraph, "🔤 Huruf Awal Server: —")
         updateStatsParagraph()
 
     elseif cmd == "StartTurn" then
         isMyTurn = true
-        safeSet(turnParagraph, "✅ GILIRAN KAMU!")
+        safeSet(turnParagraph, "🎮 Giliran: ✅ GILIRAN KAMU!")
         updateStatsParagraph()
         if autoEnabled and serverLetter ~= "" then
             task.spawn(startUltraAI)
@@ -691,13 +677,13 @@ local function onMatchUI(cmd, value)
 
     elseif cmd == "EndTurn" then
         isMyTurn = false
-        safeSet(turnParagraph, "⏳ Giliran lawan...")
+        safeSet(turnParagraph, "🎮 Giliran: ⏳ Giliran lawan...")
         updateStatsParagraph()
 
     elseif cmd == "UpdateServerLetter" then
         serverLetter = tostring(value or "")
         local displayLetter = (serverLetter ~= "") and string.upper(serverLetter) or "—"
-        safeSet(startLetterParagraph, "Huruf: " .. displayLetter)
+        safeSet(startLetterParagraph, "🔤 Huruf Awal Server: " .. displayLetter)
         if autoEnabled and matchActive and isMyTurn then
             task.spawn(startUltraAI)
         end
@@ -708,7 +694,7 @@ local function onBillboard(word)
     if matchActive and not isMyTurn then
         opponentStreamWord = tostring(word or "")
         local displayWord  = (opponentStreamWord ~= "") and opponentStreamWord or "..."
-        safeSet(opponentParagraph, "✍ Lawan mengetik: " .. displayWord)
+        safeSet(opponentParagraph, "👤 Status Lawan: ✍ Lawan mengetik: " .. displayWord)
     end
 end
 
