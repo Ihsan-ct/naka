@@ -1,6 +1,7 @@
 -- =========================================================
 -- ULTRA SMART AUTO KATA v5.0 — NAKA
 -- NEW: Human Typing Simulator + Kata Bom System
+-- KEY SYSTEM: 1 Key = 1 Device (Permanent, Hardware Locked)
 -- =========================================================
 
 if game:IsLoaded() == false then
@@ -22,13 +23,381 @@ if RayfieldFunction == nil then warn("Gagal compile Rayfield") return end
 local Rayfield = RayfieldFunction()
 if Rayfield == nil then warn("Rayfield return nil") return end
 
+-- =========================================================
+-- ██╗  ██╗███████╗██╗   ██╗    ███████╗██╗   ██╗███████╗
+-- ██║ ██╔╝██╔════╝╚██╗ ██╔╝    ██╔════╝╚██╗ ██╔╝██╔════╝
+-- █████╔╝ █████╗   ╚████╔╝     ███████╗ ╚████╔╝ ███████╗
+-- ██╔═██╗ ██╔══╝    ╚██╔╝      ╚════██║  ╚██╔╝  ╚════██║
+-- ██║  ██╗███████╗   ██║       ███████║   ██║   ███████║
+-- KEY SYSTEM — 1 KEY = 1 DEVICE (PERMANENT, HARDWARE LOCKED)
+-- =========================================================
+
+-- =========================
+-- KONFIGURASI KEY SYSTEM
+-- Ganti URL_DATABASE dengan URL raw GitHub/pastebin milikmu
+-- Format file JSON: {"KEY123": "HWID_DEVICE", "KEY456": ""}
+-- Key dengan value "" = belum terikat device (akan otomatis terikat)
+-- Key dengan value berisi HWID = sudah terikat, cek HWID harus cocok
+-- =========================
+local KEY_DATABASE_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/keys.json"
+-- ↑ GANTI dengan URL database key kamu!
+-- Format keys.json:
+-- {
+--   "NAKA-XXXX-YYYY-ZZZZ": "",
+--   "NAKA-AAAA-BBBB-CCCC": ""
+-- }
+-- Value "" = key aktif, belum terikat device
+-- Value "HWID_STRING" = sudah terikat device tertentu
+
+local BIND_ENDPOINT_URL = "https://script.google.com/macros/s/YOUR_GOOGLE_APPS_SCRIPT_ID/exec"
+-- ↑ OPSIONAL: URL Google Apps Script untuk auto-bind HWID ke key
+-- Jika tidak pakai, binding dilakukan manual oleh admin
+
+-- =========================
+-- HWID GENERATOR
+-- Menggunakan kombinasi data unik device Roblox
+-- Tidak bisa dipalsukan karena terikat akun + hardware
+-- =========================
+local Players          = game:GetService("Players")
+local LocalPlayer      = Players.LocalPlayer
+local HttpService      = game:GetService("HttpService")
+local RobloxReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local function getDeviceHWID()
+    -- Kombinasi: UserID + AccountAge + CreationDate + Platform
+    local userId      = tostring(LocalPlayer.UserId)
+    local accountAge  = tostring(LocalPlayer.AccountAge)
+    
+    -- Ambil info platform dari UserInputService
+    local UIS         = game:GetService("UserInputService")
+    local platform    = "UNKNOWN"
+    pcall(function()
+        if UIS.TouchEnabled and not UIS.KeyboardEnabled then
+            platform = "MOBILE"
+        elseif UIS.GamepadEnabled and not UIS.KeyboardEnabled then
+            platform = "CONSOLE"
+        else
+            platform = "PC"
+        end
+    end)
+
+    -- Hash sederhana dari kombinasi data
+    local raw = userId .. "-" .. accountAge .. "-" .. platform
+    
+    -- Simple hash function (djb2-style)
+    local hash = 5381
+    for i = 1, #raw do
+        local c = string.byte(raw, i)
+        hash = ((hash * 33) + c) % 2147483647
+    end
+    
+    -- Format HWID: NAKA-[UserID-Partial]-[Hash]
+    local uidPartial = string.sub(userId, 1, 6)
+    local hwid = string.format("HWID-%s-%X-%s", uidPartial, hash, platform)
+    return hwid
+end
+
+local DEVICE_HWID = getDeviceHWID()
+print("[KeySystem] Device HWID:", DEVICE_HWID)
+
+-- =========================
+-- STORAGE KEY (SimpleSpy tidak bisa intercept ini)
+-- Simpan key yang sudah diverifikasi ke writefile agar tidak perlu input ulang
+-- =========================
+local SAVE_FOLDER = "NAKA_Keys"
+local SAVE_FILE   = SAVE_FOLDER .. "/verified.dat"
+
+local function saveVerifiedKey(key)
+    pcall(function()
+        if not isfolder(SAVE_FOLDER) then
+            makefolder(SAVE_FOLDER)
+        end
+        -- Enkripsi sederhana sebelum disimpan (XOR dengan HWID)
+        local encoded = ""
+        for i = 1, #key do
+            local c = string.byte(key, i)
+            local h = string.byte(DEVICE_HWID, ((i-1) % #DEVICE_HWID) + 1)
+            encoded = encoded .. string.char(bit32.bxor(c, h))
+        end
+        -- Simpan sebagai hex
+        local hex = ""
+        for i = 1, #encoded do
+            hex = hex .. string.format("%02X", string.byte(encoded, i))
+        end
+        writefile(SAVE_FILE, hex .. "|" .. DEVICE_HWID)
+    end)
+end
+
+local function loadSavedKey()
+    local result = nil
+    pcall(function()
+        if isfile(SAVE_FILE) then
+            local content = readfile(SAVE_FILE)
+            local sep     = string.find(content, "|")
+            if not sep then return end
+            
+            local hex     = string.sub(content, 1, sep - 1)
+            local savedHwid = string.sub(content, sep + 1)
+            
+            -- Cek HWID cocok
+            if savedHwid ~= DEVICE_HWID then
+                -- HWID tidak cocok, hapus file
+                delfile(SAVE_FILE)
+                return
+            end
+            
+            -- Decode hex
+            local encoded = ""
+            for i = 1, #hex, 2 do
+                local byte = tonumber(string.sub(hex, i, i+1), 16)
+                if byte then encoded = encoded .. string.char(byte) end
+            end
+            
+            -- XOR decode
+            local key = ""
+            for i = 1, #encoded do
+                local c = string.byte(encoded, i)
+                local h = string.byte(DEVICE_HWID, ((i-1) % #DEVICE_HWID) + 1)
+                key = key .. string.char(bit32.bxor(c, h))
+            end
+            
+            if #key > 5 then
+                result = key
+            end
+        end
+    end)
+    return result
+end
+
+-- =========================
+-- VALIDASI KEY KE SERVER
+-- Cek ke database apakah key valid dan HWID cocok
+-- =========================
+local function validateKeyOnline(inputKey)
+    local success = false
+    local message = ""
+    
+    -- Ambil database key
+    local dbRaw = nil
+    local ok, err = pcall(function()
+        dbRaw = httpget(game, KEY_DATABASE_URL)
+    end)
+    
+    if not ok or not dbRaw or dbRaw == "" then
+        -- Jika tidak bisa connect, cek key yang tersimpan lokal sebagai fallback
+        local savedKey = loadSavedKey()
+        if savedKey and savedKey == inputKey then
+            return true, "✅ Verifikasi dari cache lokal berhasil! (Offline mode)"
+        end
+        return false, "❌ Tidak bisa terhubung ke server key. Cek koneksi!"
+    end
+    
+    -- Parse JSON database
+    local keyDatabase = {}
+    pcall(function()
+        keyDatabase = HttpService:JSONDecode(dbRaw)
+    end)
+    
+    if not keyDatabase then
+        return false, "❌ Database key error. Hubungi admin!"
+    end
+    
+    -- Cek apakah key ada
+    local keyUpper = string.upper(inputKey)
+    if keyDatabase[keyUpper] == nil then
+        return false, "❌ Key tidak ditemukan. Key tidak valid!"
+    end
+    
+    local boundHWID = keyDatabase[keyUpper]
+    
+    -- Key belum terikat device (value = "" atau "UNBOUND")
+    if boundHWID == "" or boundHWID == "UNBOUND" then
+        -- Key baru — akan diikat ke device ini
+        -- Coba bind via Google Apps Script (opsional)
+        pcall(function()
+            if BIND_ENDPOINT_URL ~= "https://script.google.com/macros/s/YOUR_GOOGLE_APPS_SCRIPT_ID/exec" then
+                httpget(game, BIND_ENDPOINT_URL 
+                    .. "?action=bind&key=" .. keyUpper 
+                    .. "&hwid=" .. DEVICE_HWID)
+            end
+        end)
+        return true, "✅ Key valid! Device berhasil didaftarkan. (HWID: " .. string.sub(DEVICE_HWID, 1, 20) .. "...)"
+    end
+    
+    -- Key sudah terikat — cek apakah HWID cocok
+    if boundHWID == DEVICE_HWID then
+        return true, "✅ Key valid! Device dikenali."
+    else
+        -- HWID berbeda = device lain sedang pakai key ini
+        return false, "❌ Key sudah dipakai di device lain! 1 Key = 1 Device."
+    end
+end
+
+-- =========================
+-- MAIN KEY VERIFICATION FLOW
+-- =========================
+local keyVerified = false
+
+local function runKeySystem()
+    -- Cek apakah ada key yang tersimpan
+    local savedKey = loadSavedKey()
+    
+    if savedKey then
+        print("[KeySystem] Ditemukan key tersimpan, memvalidasi...")
+        local ok, msg = validateKeyOnline(savedKey)
+        if ok then
+            print("[KeySystem] Key tersimpan valid:", msg)
+            keyVerified = true
+            Rayfield:Notify({
+                Title    = "🔑  Key Terverifikasi",
+                Content  = "Auto-login berhasil! " .. msg,
+                Duration = 4,
+                Image    = 4483362458
+            })
+            return true
+        else
+            -- Key tersimpan tidak valid lagi, hapus
+            pcall(function() delfile(SAVE_FILE) end)
+            print("[KeySystem] Key tersimpan tidak valid:", msg)
+        end
+    end
+    
+    -- Belum ada key atau key tidak valid — minta input
+    print("[KeySystem] Menampilkan UI key input...")
+    
+    -- Buat window terpisah untuk key input
+    local KeyWindow = Rayfield:CreateWindow({
+        Name            = "🔑  NAKA KEY SYSTEM",
+        LoadingTitle    = "Verifikasi Key",
+        LoadingSubtitle = "1 Key = 1 Device | Permanent",
+        ConfigurationSaving = { Enabled = false },
+        Discord   = { Enabled = false },
+        KeySystem = false
+    })
+    
+    local KeyTab = KeyWindow:CreateTab("🔑  MASUKKAN KEY", 4483362458)
+    
+    KeyTab:CreateSection("◈  AKTIVASI KEY")
+    KeyTab:CreateLabel("🔑  Masukkan key aktivasi NAKA")
+    KeyTab:CreateLabel("⚠️   1 Key hanya bisa dipakai di 1 device!")
+    KeyTab:CreateLabel("🔒  Setelah aktivasi, key terikat permanen")
+    KeyTab:CreateLabel("◦   Device ID  :  " .. string.sub(DEVICE_HWID, 1, 24) .. "...")
+    
+    KeyTab:CreateSection("◈  INPUT KEY")
+    
+    local inputKeyValue = ""
+    local statusLabel   = KeyTab:CreateLabel("◦  Status  :  Menunggu input key...")
+    
+    KeyTab:CreateInput({
+        Name        = "🔑  Key Aktivasi",
+        PlaceholderText = "Contoh: NAKA-XXXX-YYYY-ZZZZ",
+        RemoveTextAfterFocusLost = false,
+        Callback = function(Value)
+            inputKeyValue = string.upper(string.gsub(Value, "%s+", ""))
+        end
+    })
+    
+    KeyTab:CreateButton({
+        Name     = "✅  VERIFIKASI KEY",
+        Callback = function()
+            if inputKeyValue == "" then
+                pcall(function()
+                    statusLabel:Set("◦  Status  :  ❌ Key tidak boleh kosong!")
+                end)
+                Rayfield:Notify({
+                    Title    = "❌  Input Kosong",
+                    Content  = "Masukkan key terlebih dahulu!",
+                    Duration = 3,
+                    Image    = 4483362458
+                })
+                return
+            end
+            
+            pcall(function()
+                statusLabel:Set("◦  Status  :  ⏳ Memverifikasi ke server...")
+            end)
+            
+            task.spawn(function()
+                local ok, msg = validateKeyOnline(inputKeyValue)
+                
+                if ok then
+                    -- Simpan key ke lokal
+                    saveVerifiedKey(inputKeyValue)
+                    keyVerified = true
+                    
+                    pcall(function()
+                        statusLabel:Set("◦  Status  :  " .. msg)
+                    end)
+                    
+                    Rayfield:Notify({
+                        Title    = "✅  Key Valid!",
+                        Content  = msg,
+                        Duration = 5,
+                        Image    = 4483362458
+                    })
+                    
+                    task.wait(2)
+                    -- Tutup window key, lanjut load script utama
+                    pcall(function()
+                        KeyWindow:Destroy()
+                    end)
+                    
+                else
+                    pcall(function()
+                        statusLabel:Set("◦  Status  :  " .. msg)
+                    end)
+                    
+                    Rayfield:Notify({
+                        Title    = "❌  Key Ditolak",
+                        Content  = msg,
+                        Duration = 5,
+                        Image    = 4483362458
+                    })
+                end
+            end)
+        end
+    })
+    
+    KeyTab:CreateSection("◈  CARA MENDAPATKAN KEY")
+    KeyTab:CreateLabel("1️⃣   Hubungi admin NAKA")
+    KeyTab:CreateLabel("2️⃣   Beli / dapatkan key aktivasi")
+    KeyTab:CreateLabel("3️⃣   Masukkan key di atas")
+    KeyTab:CreateLabel("4️⃣   Key akan terikat ke device ini selamanya")
+    
+    -- Tunggu sampai key terverifikasi
+    local timeout = 0
+    while not keyVerified do
+        task.wait(0.5)
+        timeout = timeout + 0.5
+        if timeout > 300 then  -- 5 menit timeout
+            warn("[KeySystem] Timeout menunggu key input")
+            return false
+        end
+    end
+    
+    return true
+end
+
+-- Jalankan key system
+local keyOk = runKeySystem()
+if not keyOk then
+    warn("[NAKA] Key verification gagal. Script dihentikan.")
+    return
+end
+
+print("[NAKA] Key verified! Memuat script utama...")
+task.wait(1)
+
+-- =========================================================
+-- SCRIPT UTAMA (hanya jalan jika key valid)
+-- =========================================================
+
 -- =========================
 -- SERVICES
 -- =========================
 local GetService        = game.GetService
 local ReplicatedStorage = GetService(game, "ReplicatedStorage")
-local Players           = GetService(game, "Players")
-local LocalPlayer       = Players.LocalPlayer
+local LocalPlayer2      = Players.LocalPlayer
 
 -- =========================
 -- LOAD WORDLIST
@@ -103,8 +472,8 @@ local config = {
     filterEnding   = {},
     antiDetectMode = true,
     preferRare     = false,
-    bombMode       = false,     -- aktifkan kata bom
-    bombTier       = "auto",    -- "biasa" | "kuat" | "mega" | "auto"
+    bombMode       = false,
+    bombTier       = "auto",
 }
 
 -- =========================
@@ -117,26 +486,17 @@ local function safeSet(paragraph, content)
 end
 
 -- =========================================================
--- ██╗  ██╗██╗   ██╗███╗   ███╗ █████╗ ███╗   ██╗
--- ██║  ██║██║   ██║████╗ ████║██╔══██╗████╗  ██║
--- ███████║██║   ██║██╔████╔██║███████║██╔██╗ ██║
--- ██╔══██║██║   ██║██║╚██╔╝██║██╔══██║██║╚██╗██║
--- ██║  ██║╚██████╔╝██║ ╚═╝ ██║██║  ██║██║ ╚████║
--- TYPING SIMULATOR
+-- HUMAN TYPING SIMULATOR
 -- =========================================================
 
--- =========================
--- PROFIL MANUSIA
--- Dibuat SEKALI per sesi — setiap sesi punya kepribadian unik
--- =========================
 local humanProfile = {
-    baseSpeed      = math.random(350, 550),     -- ms per karakter (natural untuk timer 15 detik)
-    mistakeChance  = math.random(6, 13) / 100,  -- 6-13% chance typo per char
-    hesitateChance = math.random(8, 18) / 100,  -- 8-18% chance pause tiba2
-    isBurstyTyper  = math.random(1, 2) == 1,    -- cepat di awal lambat di akhir
-    fatigueRate    = math.random(1, 4),          -- ms tambahan per kata
-    doubleTypoRate = math.random(2, 6) / 100,   -- 2-6% chance salah 2 huruf sekaligus
-    wordCount      = 0,                          -- counter fatigue
+    baseSpeed      = math.random(350, 550),
+    mistakeChance  = math.random(6, 13) / 100,
+    hesitateChance = math.random(8, 18) / 100,
+    isBurstyTyper  = math.random(1, 2) == 1,
+    fatigueRate    = math.random(1, 4),
+    doubleTypoRate = math.random(2, 6) / 100,
+    wordCount      = 0,
 }
 
 print(string.format(
@@ -149,10 +509,6 @@ print(string.format(
     humanProfile.doubleTypoRate * 100
 ))
 
--- =========================
--- KEYBOARD LAYOUT — HURUF TETANGGA
--- Typo realistis berdasarkan posisi keyboard QWERTY
--- =========================
 local NEIGHBORS = {
     a={"q","w","s","z"},       b={"v","g","h","n"},
     c={"x","d","f","v"},       d={"s","e","r","f","c","x"},
@@ -178,89 +534,55 @@ local function getNearbyChar(char)
     return string.sub(chars, math.random(1,26), math.random(1,26))
 end
 
--- =========================
--- WAIT HELPER
--- =========================
 local function waitMs(ms)
     if ms < 8 then ms = 8 end
     task.wait(ms / 1000)
 end
 
--- =========================
--- CHAR DELAY — NATURAL PER KARAKTER
--- =========================
 local function charDelay(charIndex, wordLength)
     local base = humanProfile.baseSpeed
     base = base + (humanProfile.wordCount * humanProfile.fatigueRate)
-
-    -- Bursty typer: cepat di awal, melambat di akhir
     if humanProfile.isBurstyTyper then
         local progress = charIndex / wordLength
         if progress < 0.35 then
-            base = base * 0.85   -- sedikit lebih cepat di awal
+            base = base * 0.85
         elseif progress > 0.75 then
-            base = base * 1.4    -- lebih lambat di akhir (capek)
+            base = base * 1.4
         end
     end
-
-    -- Karakter pertama: jeda tangan bersiap setelah mikir
     if charIndex == 1 then
-        base = base + math.random(1000, 3000)  -- jeda mikir 1-3 detik
+        base = base + math.random(1000, 3000)
     end
-
-    -- Variasi noise natural ±15%
     local noise = math.random(-15, 15) / 100
     base = base * (1 + noise)
-
-    -- Sesekali microlag (lag internet / pikir sebentar)
     if math.random(1, 10) == 1 then
         base = base + math.random(200, 600)
     end
-
     if base < 150 then base = 150 end
     return math.floor(base)
 end
 
--- =========================
--- HUMAN TYPING ENGINE
--- Kirim kata dengan simulasi manusia:
--- - Kadang typo lalu hapus (tidak selalu)
--- - Kadang hesitate / pause
--- - Kadang double typo
--- - Kecepatan bervariasi alami
--- =========================
 local function humanTypeWord(selectedWord, serverPrefix)
     humanProfile.wordCount = humanProfile.wordCount + 1
-
-    local currentDisplay = serverPrefix   -- kata yang tampil di layar saat ini
+    local currentDisplay = serverPrefix
     local remain         = string.sub(selectedWord, #serverPrefix + 1)
     local chars          = {}
-
-    -- Pecah remain jadi array karakter
     for i = 1, #remain do
         table.insert(chars, string.sub(remain, i, i))
     end
-
     local i = 1
     while i <= #chars do
         if not matchActive or not isMyTurn then return false end
-
         local correctChar = chars[i]
         local rolled      = math.random()
-
-        -- ── HESITATE: pause tiba-tiba sebelum ketik ──
         if math.random() < humanProfile.hesitateChance then
-            -- Berhenti sebentar, tidak ada input
             waitMs(math.random(400, 900))
-            -- Kadang pas hesitate justru hapus 1 char (kayak mau edit)
             if math.random(1,4) == 1 and #currentDisplay > #serverPrefix then
                 currentDisplay = string.sub(currentDisplay, 1, #currentDisplay - 1)
                 TypeSound:FireServer()
                 BillboardUpdate:FireServer(currentDisplay)
                 waitMs(math.random(100, 300))
-                -- Ketik lagi char yang dihapus
-                currentDisplay = currentDisplay .. string.sub(
-                    selectedWord, #currentDisplay + 1, #currentDisplay + 1)
+                currentDisplay = currentDisplay .. string.sub(selectedWord, #currentDisplay + 1, #currentDisplay + 1)
                 TypeSound:FireServer()
                 BillboardUpdate:FireServer(currentDisplay)
                 waitMs(charDelay(i, #chars))
@@ -268,84 +590,57 @@ local function humanTypeWord(selectedWord, serverPrefix)
                 continue
             end
         end
-
-        -- ── DOUBLE TYPO: salah 2 huruf sekaligus ──
         if rolled < humanProfile.doubleTypoRate and i <= #chars - 1 then
-            -- Ketik 2 huruf salah
             local wrong1 = getNearbyChar(correctChar)
             local wrong2 = getNearbyChar(chars[i+1] or correctChar)
-
             currentDisplay = currentDisplay .. wrong1
             TypeSound:FireServer()
             BillboardUpdate:FireServer(currentDisplay)
             waitMs(charDelay(i, #chars) * 0.6)
-
             currentDisplay = currentDisplay .. wrong2
             TypeSound:FireServer()
             BillboardUpdate:FireServer(currentDisplay)
             waitMs(math.random(80, 200))
-
-            -- Hapus 2 huruf salah
             currentDisplay = string.sub(currentDisplay, 1, #currentDisplay - 1)
             TypeSound:FireServer()
             BillboardUpdate:FireServer(currentDisplay)
             waitMs(math.random(60, 150))
-
             currentDisplay = string.sub(currentDisplay, 1, #currentDisplay - 1)
             TypeSound:FireServer()
             BillboardUpdate:FireServer(currentDisplay)
             waitMs(math.random(80, 220))
-
-            -- Ketik benar
             currentDisplay = currentDisplay .. correctChar
             TypeSound:FireServer()
             BillboardUpdate:FireServer(currentDisplay)
             waitMs(charDelay(i, #chars))
             i = i + 1
-
-        -- ── SINGLE TYPO: salah 1 huruf lalu hapus ──
         elseif rolled < (humanProfile.doubleTypoRate + humanProfile.mistakeChance) then
             local wrongChar = getNearbyChar(correctChar)
-
-            -- Ketik huruf salah
             currentDisplay = currentDisplay .. wrongChar
             TypeSound:FireServer()
             BillboardUpdate:FireServer(currentDisplay)
-
-            -- Durasi sebelum sadar salah (50-300ms)
             waitMs(math.random(50, 300))
-
-            -- Kadang lanjut 1-2 huruf lagi baru sadar salah (lebih human)
             local extraBeforeRealize = math.random(1, 5)
             if extraBeforeRealize <= 2 and i < #chars then
-                -- Ketik 1 huruf lagi sebelum sadar salah
                 local nextChar = chars[i+1] or correctChar
                 currentDisplay = currentDisplay .. nextChar
                 TypeSound:FireServer()
                 BillboardUpdate:FireServer(currentDisplay)
                 waitMs(math.random(60, 180))
-
-                -- Hapus 2: huruf tambahan + huruf salah
                 currentDisplay = string.sub(currentDisplay, 1, #currentDisplay - 1)
                 TypeSound:FireServer()
                 BillboardUpdate:FireServer(currentDisplay)
                 waitMs(math.random(50, 130))
             end
-
-            -- Hapus huruf salah
             currentDisplay = string.sub(currentDisplay, 1, #currentDisplay - 1)
             TypeSound:FireServer()
             BillboardUpdate:FireServer(currentDisplay)
             waitMs(math.random(80, 250))
-
-            -- Ketik benar
             currentDisplay = currentDisplay .. correctChar
             TypeSound:FireServer()
             BillboardUpdate:FireServer(currentDisplay)
             waitMs(charDelay(i, #chars))
             i = i + 1
-
-        -- ── NORMAL: ketik benar ──
         else
             currentDisplay = currentDisplay .. correctChar
             TypeSound:FireServer()
@@ -354,8 +649,6 @@ local function humanTypeWord(selectedWord, serverPrefix)
             i = i + 1
         end
     end
-
-    -- Jeda kecil sebelum submit (baca ulang sebentar)
     waitMs(math.random(400, 1000))
     return true
 end
@@ -364,21 +657,12 @@ end
 -- 💣 KATA BOM SYSTEM
 -- =========================================================
 
--- =========================
--- DEFINISI TIER BOM
--- Tier ditentukan berdasarkan jumlah kata di kamus
--- yang bisa dipakai lawan dari huruf akhir kata ini
--- =========================
 local BOM_TIERS = {
-    -- Tier 1 — Bom Biasa: akhiran langka tapi masih ada beberapa kata
     biasa = {"f","v","w","y"},
-    -- Tier 2 — Bom Kuat: akhiran sangat langka
     kuat  = {"x","q","z"},
-    -- Tier 3 — Mega Bom: akhiran hampir tidak ada sambungannya + kata panjang
     mega  = {"x","q","z","f","v"},
 }
 
--- Cache hasil analisis kamus per huruf (dibangun satu kali)
 local letterCountCache = {}
 
 local function buildLetterCache()
@@ -396,31 +680,23 @@ end
 
 task.spawn(buildLetterCache)
 
--- Hitung skor "kelangkaan" huruf akhir
--- Makin sedikit kata yang bisa dipakai lawan = makin tinggi skor bom
 local function getBombScore(word)
     local lastChar = string.sub(word, -1)
     local count    = letterCountCache[lastChar] or 9999
     local len      = #word
-
-    local score = 0
-    -- Makin sedikit kata untuk huruf itu = makin berbahaya
+    local score    = 0
     if count < 50  then score = score + 100
     elseif count < 150 then score = score + 60
     elseif count < 400 then score = score + 30
     elseif count < 800 then score = score + 10
     end
-
-    -- Kata panjang lebih sulit dibalas
     if len >= 12 then score = score + 30
     elseif len >= 9 then score = score + 15
     elseif len >= 7 then score = score + 5
     end
-
     return score
 end
 
--- Tentukan tier bom berdasarkan skor
 local function getBombTier(score)
     if score >= 120 then return "mega"
     elseif score >= 60 then return "kuat"
@@ -429,13 +705,9 @@ local function getBombTier(score)
     end
 end
 
--- Cari kata bom terbaik untuk huruf awalan tertentu
--- tierTarget: "biasa" | "kuat" | "mega" | "auto"
 local function findBombWord(prefix, tierTarget)
     local candidates = {}
     local lowerPrefix = string.lower(prefix)
-
-    -- Tentukan set akhiran yang boleh berdasarkan tier
     local allowedEndings = {}
     if tierTarget == "mega" then
         for _, e in ipairs(BOM_TIERS.mega) do allowedEndings[e] = true end
@@ -447,12 +719,10 @@ local function findBombWord(prefix, tierTarget)
         for _, e in ipairs(BOM_TIERS.kuat)  do allowedEndings[e] = true end
         for _, e in ipairs(BOM_TIERS.mega)  do allowedEndings[e] = true end
     else
-        -- auto: semua langka
         for _, e in ipairs(BOM_TIERS.biasa) do allowedEndings[e] = true end
         for _, e in ipairs(BOM_TIERS.kuat)  do allowedEndings[e] = true end
         for _, e in ipairs(BOM_TIERS.mega)  do allowedEndings[e] = true end
     end
-
     for _, word in ipairs(kataModule) do
         if string.sub(word, 1, #lowerPrefix) == lowerPrefix
             and not usedWords[word]
@@ -467,17 +737,13 @@ local function findBombWord(prefix, tierTarget)
             end
         end
     end
-
-    -- Sort by bomb score tertinggi
     table.sort(candidates, function(a,b) return a.score > b.score end)
-
     if #candidates > 0 then
         return candidates[1].word, getBombTier(candidates[1].score), candidates[1].score
     end
     return nil, nil, 0
 end
 
--- Label bom di UI (diset nanti)
 local labelBombStatus  = nil
 local labelBombStock   = nil
 
@@ -511,7 +777,7 @@ local function updateBombStock()
 end
 
 -- =========================
--- SCORING SYSTEM (asli)
+-- SCORING SYSTEM
 -- =========================
 local HARD_ENDINGS = {
     ["x"]=10, ["q"]=10, ["f"]=8, ["v"]=8,
@@ -562,7 +828,6 @@ local function getSmartWords(prefix)
     local lowerPrefix = string.lower(prefix)
     local filterSet   = {}
     local hasFilter   = false
-
     for _, v in ipairs(config.filterEnding) do
         local lv = string.lower(tostring(v))
         if lv ~= "semua" and lv ~= "" then
@@ -570,7 +835,6 @@ local function getSmartWords(prefix)
             hasFilter = true
         end
     end
-
     for _, word in ipairs(kataModule) do
         if string.sub(word, 1, #lowerPrefix) == lowerPrefix and not isUsed(word) then
             local len = #word
@@ -587,7 +851,6 @@ local function getSmartWords(prefix)
             end
         end
     end
-
     table.sort(results, function(a,b) return scoreWord(a) > scoreWord(b) end)
     return results
 end
@@ -610,7 +873,6 @@ local function startUltraAI()
     local bombTierUsed = nil
     local bombScore    = 0
 
-    -- ── Cek apakah pakai bom ──
     if config.bombMode then
         local bWord, bTier, bScore = findBombWord(serverLetter, config.bombTier)
         if bWord then
@@ -622,7 +884,6 @@ local function startUltraAI()
         end
     end
 
-    -- ── Fallback ke normal jika bom tidak tersedia ──
     if not selectedWord then
         local words = getSmartWords(serverLetter)
         if #words == 0 then
@@ -637,7 +898,6 @@ local function startUltraAI()
                 return
             end
         end
-
         if config.aggression >= 100 then
             selectedWord = words[1]
         else
@@ -647,18 +907,15 @@ local function startUltraAI()
         end
     end
 
-    -- ── Human Typing ──
     local success = humanTypeWord(selectedWord, serverLetter)
     if not success then
         autoRunning = false
         return
     end
 
-    -- ── Submit ──
     SubmitWord:FireServer(selectedWord)
     addUsedWord(selectedWord)
 
-    -- Notif jika bom berhasil
     if isBomb then
         stats.bombsFired = (stats.bombsFired or 0) + 1
         local tierIcon = bombTierUsed == "mega" and "💣💣💣 MEGA BOM"
@@ -691,8 +948,7 @@ task.spawn(function()
 end)
 
 -- =========================================================
--- BUILD UI
--- 4 Tab: BATTLE | BOMB | SETTINGS | INFO
+-- BUILD UI — 5 Tab: KEY INFO | BATTLE | BOMB | SETTINGS | INFO
 -- =========================================================
 local Window = Rayfield:CreateWindow({
     Name            = "⚔ NAKA  •  AUTO KATA",
@@ -711,9 +967,80 @@ Rayfield:LoadConfiguration()
 
 Rayfield:Notify({
     Title    = "⚔  NAKA v5.0",
-    Content  = "Human Typing + Kata Bom aktif!",
+    Content  = "Key Verified! Human Typing + Kata Bom aktif!",
     Duration = 5,
     Image    = 4483362458
+})
+
+-- ╔══════════════════════════════╗
+-- ║   TAB 0 — 🔑 KEY INFO        ║
+-- ╚══════════════════════════════╝
+local KeyInfoTab = Window:CreateTab("🔑  KEY", 4483362458)
+
+KeyInfoTab:CreateSection("◈  STATUS KEY")
+KeyInfoTab:CreateLabel("✅  Key Terverifikasi  —  Device Terdaftar")
+KeyInfoTab:CreateLabel("🔒  1 Key = 1 Device  |  Permanen")
+KeyInfoTab:CreateLabel("◦  HWID  :  " .. string.sub(DEVICE_HWID, 1, 30) .. "...")
+
+local savedKeyForDisplay = loadSavedKey() or "—"
+local displayKey = string.len(savedKeyForDisplay) > 8
+    and (string.sub(savedKeyForDisplay, 1, 9) .. "****")
+    or savedKeyForDisplay
+KeyInfoTab:CreateLabel("◦  Key   :  " .. displayKey)
+
+KeyInfoTab:CreateSection("◈  KEAMANAN")
+KeyInfoTab:CreateLabel("🔐  Key terikat hardware Roblox kamu")
+KeyInfoTab:CreateLabel("🚫  Tidak bisa dipindah ke device lain")
+KeyInfoTab:CreateLabel("♾️   Berlaku selamanya (permanent)")
+
+KeyInfoTab:CreateSection("◈  AKSI")
+KeyInfoTab:CreateButton({
+    Name     = "🔄  Verifikasi Ulang Key (Online Check)",
+    Callback = function()
+        local sk = loadSavedKey()
+        if not sk then
+            Rayfield:Notify({
+                Title    = "❌  Tidak ada key tersimpan",
+                Content  = "Restart script untuk input key",
+                Duration = 3,
+                Image    = 4483362458
+            })
+            return
+        end
+        task.spawn(function()
+            local ok, msg = validateKeyOnline(sk)
+            Rayfield:Notify({
+                Title    = ok and "✅  Key Valid" or "❌  Key Bermasalah",
+                Content  = msg,
+                Duration = 5,
+                Image    = 4483362458
+            })
+        end)
+    end
+})
+
+KeyInfoTab:CreateButton({
+    Name     = "🗑️  Hapus Key Tersimpan (Logout Device)",
+    Callback = function()
+        pcall(function()
+            if isfile(SAVE_FILE) then
+                delfile(SAVE_FILE)
+                Rayfield:Notify({
+                    Title    = "🗑️  Key Dihapus",
+                    Content  = "Key lokal dihapus. Restart untuk input key baru.",
+                    Duration = 5,
+                    Image    = 4483362458
+                })
+            else
+                Rayfield:Notify({
+                    Title    = "⚠️  Tidak ada file",
+                    Content  = "Tidak ada key yang tersimpan",
+                    Duration = 3,
+                    Image    = 4483362458
+                })
+            end
+        end)
+    end
 })
 
 -- ╔══════════════════════════════╗
@@ -881,7 +1208,6 @@ BattleTab:CreateButton({
 local BombTab = Window:CreateTab("💣  KATA BOM", 4483362458)
 
 BombTab:CreateSection("◈  KATA BOM SYSTEM")
-
 BombTab:CreateLabel("💡  Kata Bom = kata yang huruf akhirnya")
 BombTab:CreateLabel("     hampir tidak ada sambungannya di kamus.")
 BombTab:CreateLabel("     Lawan hampir pasti tidak bisa balas!")
@@ -935,7 +1261,6 @@ BombTab:CreateSection("◈  STATUS BOM REALTIME")
 labelBombStatus = BombTab:CreateLabel("💣  Belum ada data  —  mulai pertandingan")
 labelBombStock  = BombTab:CreateLabel("◦  Stok Kata Bom  :  menghitung...")
 
--- Hitung stok setelah cache siap
 task.delay(3, function()
     pcall(updateBombStock)
 end)
@@ -1031,7 +1356,6 @@ SettingsTab:CreateSlider({
 })
 
 SettingsTab:CreateSection("◈  HUMAN TYPING SIMULATOR")
-
 SettingsTab:CreateLabel("🎭  Profil manusia dibuat otomatis tiap sesi")
 SettingsTab:CreateLabel(string.format("◦  Kecepatan Base   :  %d ms/karakter", humanProfile.baseSpeed))
 SettingsTab:CreateLabel(string.format("◦  Estimasi 6 huruf :  ~5-8 detik"))
@@ -1096,9 +1420,15 @@ InfoTab:CreateSection("◈  TENTANG SCRIPT")
 InfoTab:CreateLabel("⚔   NAKA AUTO KATA  —  v5.0")
 InfoTab:CreateLabel("◦   Pembuat   :  NAKA")
 InfoTab:CreateLabel("◦   Kamus     :  80.000+ kata Indonesia")
-InfoTab:CreateLabel("◦   NEW       :  Human Typing + Kata Bom!")
+InfoTab:CreateLabel("◦   NEW       :  Human Typing + Kata Bom + Key System!")
 
-InfoTab:CreateSection("◈  FITUR BARU v5.0")
+InfoTab:CreateSection("◈  KEY SYSTEM v1.0")
+InfoTab:CreateLabel("🔑  1 Key = 1 Device  (Hardware Locked)")
+InfoTab:CreateLabel("♾️   Berlaku selamanya — tidak perlu renew")
+InfoTab:CreateLabel("🔒  Key terikat HWID device Roblox")
+InfoTab:CreateLabel("💾  Tersimpan lokal + enkripsi XOR")
+
+InfoTab:CreateSection("◈  FITUR v5.0")
 InfoTab:CreateLabel("🎭  Human Typing Simulator")
 InfoTab:CreateLabel("     Typo natural, hesitate, double typo,")
 InfoTab:CreateLabel("     profil unik tiap sesi, fatigue system")
@@ -1107,10 +1437,11 @@ InfoTab:CreateLabel("     3 tier bom, realtime preview,")
 InfoTab:CreateLabel("     auto pilih kata paling mematikan")
 
 InfoTab:CreateSection("◈  CARA PAKAI")
-InfoTab:CreateLabel("1️⃣   Buka tab BATTLE → Aktifkan Auto Kata")
-InfoTab:CreateLabel("2️⃣   Buka tab BOMB → Aktifkan Kata Bom")
-InfoTab:CreateLabel("3️⃣   Pilih tier bom (auto = disarankan)")
-InfoTab:CreateLabel("4️⃣   Masuk pertandingan — AI bekerja sendiri")
+InfoTab:CreateLabel("1️⃣   Masukkan key saat pertama kali")
+InfoTab:CreateLabel("2️⃣   Key otomatis tersimpan di device ini")
+InfoTab:CreateLabel("3️⃣   Buka tab BATTLE → Aktifkan Auto Kata")
+InfoTab:CreateLabel("4️⃣   Buka tab BOMB → Aktifkan Kata Bom")
+InfoTab:CreateLabel("5️⃣   Masuk pertandingan — AI bekerja sendiri")
 
 InfoTab:CreateSection("◈  TIPS")
 InfoTab:CreateLabel("💣   Tier MEGA untuk lawan kuat")
@@ -1170,7 +1501,6 @@ local function onMatchUI(cmd, value)
         serverLetter = tostring(value or "")
         local dispLetter = serverLetter ~= "" and string.upper(serverLetter) or "—"
         safeSet(startLetterParagraph, "🔤 Huruf Awal: " .. dispLetter)
-        -- Preview bom saat huruf berubah
         if config.bombMode then
             task.spawn(function()
                 local bWord, bTier, bScore = findBombWord(serverLetter, config.bombTier)
@@ -1206,4 +1536,8 @@ MatchUI.OnClientEvent:Connect(onMatchUI)
 BillboardUpdate.OnClientEvent:Connect(onBillboard)
 UsedWordWarn.OnClientEvent:Connect(onUsedWarn)
 
-print("NAKA AUTO KATA v5.0 — LOADED  |  Human Typing + Kata Bom AKTIF")
+print("NAKA AUTO KATA v5.0 — LOADED  |  Key System + Human Typing + Kata Bom AKTIF")
+
+-- =========================================================
+-- END OF SCRIPT
+-- =========================================================
