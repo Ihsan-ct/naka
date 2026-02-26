@@ -326,12 +326,13 @@ task.spawn(function()
 end)
 
 -- =========================
--- BUILD UI
+-- BUILD UI — PREMIUM REDESIGN
+-- 3 Tab: BATTLE | SETTINGS | INFO
 -- =========================
 local Window = Rayfield:CreateWindow({
-    Name = "🔥 NAKA AUTO KATA v3.1",
-    LoadingTitle    = "Memuat Sistem NAKA",
-    LoadingSubtitle = "AI Penjawab Kata Otomatis",
+    Name            = "⚔ NAKA  •  AUTO KATA",
+    LoadingTitle    = "N A K A",
+    LoadingSubtitle = "Ultra Smart Word AI — v4.0",
     ConfigurationSaving = {
         Enabled    = true,
         FolderName = "NAKA",
@@ -344,28 +345,37 @@ local Window = Rayfield:CreateWindow({
 Rayfield:LoadConfiguration()
 
 Rayfield:Notify({
-    Title    = "✅ NAKA v3.1 Siap",
-    Content  = "Auto Kata + Filter Akhiran + Anti-Detect dimuat!",
-    Duration = 5,
+    Title    = "⚔  NAKA v4.0",
+    Content  = "Sistem dimuat  •  80K+ kata siap",
+    Duration = 4,
     Image    = 4483362458
 })
 
--- ==============================
--- TAB 1: PENGATURAN UTAMA
--- ==============================
-local MainTab = Window:CreateTab("🎮 UTAMA", 4483362458)
+-- ╔══════════════════════════════╗
+-- ║   TAB 1 — BATTLE             ║
+-- ║   Status + Toggle + Filter   ║
+-- ╚══════════════════════════════╝
+local BattleTab = Window:CreateTab("⚔  BATTLE", 4483362458)
 
-MainTab:CreateSection("🤖 AUTO KATA")
+-- ── STATUS LIVE ──────────────────
+BattleTab:CreateSection("◈  STATUS LIVE")
 
-MainTab:CreateToggle({
-    Name         = "🔥 Aktifkan Auto Kata",
+local turnParagraph        = BattleTab:CreateLabel("●  Giliran      :  ⏳ Menunggu pertandingan...")
+local startLetterParagraph = BattleTab:CreateLabel("●  Huruf Awalan :  —")
+local opponentParagraph    = BattleTab:CreateLabel("●  Lawan        :  ⏳ Menunggu...")
+
+-- ── AUTO KATA ────────────────────
+BattleTab:CreateSection("◈  AUTO KATA")
+
+BattleTab:CreateToggle({
+    Name         = "⚡  Aktifkan Auto Kata",
     CurrentValue = false,
     Callback     = function(Value)
         autoEnabled = Value
         if Value then
             Rayfield:Notify({
-                Title    = "🤖 Auto Kata",
-                Content  = "Auto Kata AKTIF — AI siap bermain!",
+                Title    = "⚡  Auto Kata ON",
+                Content  = "AI aktif — siap dominasi!",
                 Duration = 3,
                 Image    = 4483362458
             })
@@ -374,35 +384,32 @@ MainTab:CreateToggle({
             end
         else
             Rayfield:Notify({
-                Title    = "🤖 Auto Kata",
-                Content  = "Auto Kata NONAKTIF",
-                Duration = 3,
+                Title    = "⚡  Auto Kata OFF",
+                Content  = "AI dinonaktifkan",
+                Duration = 2,
                 Image    = 4483362458
             })
         end
     end
 })
 
-MainTab:CreateSection("🔚 FILTER AKHIRAN HURUF")
-
-MainTab:CreateParagraph({
-    Title   = "ℹ Cara Kerja Filter",
-    Content =
-        "Pilih BEBERAPA huruf akhiran sekaligus.\n" ..
-        "AI akan pilih kata berakhiran salah satu dari huruf yang dipilih.\n" ..
-        "Kosongkan pilihan = tidak ada filter (semua kata boleh).\n" ..
-        "💡 Rekomendasi Trap: pilih x, q, z, f, v"
+BattleTab:CreateToggle({
+    Name         = "🃏  Mode Kata Langka",
+    CurrentValue = false,
+    Callback     = function(Value) config.preferRare = Value end
 })
 
-local filterLabel = MainTab:CreateLabel("🔚 Filter aktif: (tidak ada — semua kata boleh)")
+-- ── FILTER AKHIRAN ───────────────
+BattleTab:CreateSection("◈  FILTER AKHIRAN  ( TRAP )")
 
-MainTab:CreateDropdown({
-    Name            = "🔚 Pilih Akhiran Huruf (bisa lebih dari satu)",
+local filterLabel = BattleTab:CreateLabel("◦  Filter aktif  :  semua kata")
+
+BattleTab:CreateDropdown({
+    Name            = "🔡  Pilih Akhiran (multi-select)",
     Options         = {"a","i","u","e","o","n","r","s","t","k","h","l","m","p","g","j","f","v","z","x","q","w","y"},
     CurrentOption   = {},
     MultipleOptions = true,
     Callback        = function(Value)
-        -- Value adalah table berisi huruf-huruf yang dipilih
         local selected = {}
         if type(Value) == "table" then
             for _, v in ipairs(Value) do
@@ -410,16 +417,14 @@ MainTab:CreateDropdown({
             end
         end
         config.filterEnding = selected
-
-        -- Update label info
         if #selected == 0 then
-            pcall(function() filterLabel:Set("🔚 Filter aktif: (tidak ada — semua kata boleh)") end)
+            pcall(function() filterLabel:Set("◦  Filter aktif  :  semua kata") end)
         else
-            local display = table.concat(selected, ", ")
-            pcall(function() filterLabel:Set("🔚 Filter aktif: " .. display) end)
+            local display = table.concat(selected, "  ·  ")
+            pcall(function() filterLabel:Set("◦  Filter aktif  :  " .. display) end)
             Rayfield:Notify({
-                Title    = "🔚 Filter Akhiran",
-                Content  = "Filter: " .. display,
+                Title    = "🔡  Filter Diset",
+                Content  = display,
                 Duration = 3,
                 Image    = 4483362458
             })
@@ -427,155 +432,35 @@ MainTab:CreateDropdown({
     end
 })
 
--- Tombol preset trap letter
-MainTab:CreateButton({
-    Name     = "💀 Preset TRAP (x, q, z, f, v)",
+BattleTab:CreateButton({
+    Name     = "💀  TRAP MODE  —  x · q · z · f · v",
     Callback = function()
-        config.filterEnding = {"x", "q", "z", "f", "v"}
-        pcall(function() filterLabel:Set("🔚 Filter aktif: x, q, z, f, v  💀 TRAP MODE") end)
+        config.filterEnding = {"x","q","z","f","v"}
+        pcall(function() filterLabel:Set("◦  Filter aktif  :  x  ·  q  ·  z  ·  f  ·  v   [ 💀 TRAP ]") end)
         Rayfield:Notify({
-            Title    = "💀 TRAP MODE",
-            Content  = "Filter akhiran diset ke: x, q, z, f, v\nLawan akan kesulitan!",
+            Title    = "💀  TRAP MODE ON",
+            Content  = "Lawan akan kesulitan menemukan kata!",
             Duration = 4,
             Image    = 4483362458
         })
     end
 })
 
-MainTab:CreateButton({
-    Name     = "🔄 Reset Filter (semua kata)",
+BattleTab:CreateButton({
+    Name     = "↺  Reset Filter",
     Callback = function()
         config.filterEnding = {}
-        pcall(function() filterLabel:Set("🔚 Filter aktif: (tidak ada — semua kata boleh)") end)
-        Rayfield:Notify({
-            Title    = "🔄 Filter Reset",
-            Content  = "Filter akhiran dihapus",
-            Duration = 3,
-            Image    = 4483362458
-        })
+        pcall(function() filterLabel:Set("◦  Filter aktif  :  semua kata") end)
     end
 })
 
--- ==============================
--- TAB 2: KECERDASAN AI
--- ==============================
-local AITab = Window:CreateTab("🧠 KECERDASAN AI", 4483362458)
+-- ── STATISTIK RINGKAS ────────────
+BattleTab:CreateSection("◈  STATISTIK")
 
-AITab:CreateSection("⚙ PARAMETER KATA")
-
-AITab:CreateSlider({
-    Name         = "⚡ Tingkat Agresif",
-    Range        = {0, 100},
-    Increment    = 5,
-    CurrentValue = config.aggression,
-    Callback     = function(Value) config.aggression = Value end
-})
-
-AITab:CreateSlider({
-    Name         = "🔤 Panjang Kata Minimum",
-    Range        = {2, 6},
-    Increment    = 1,
-    CurrentValue = config.minLength,
-    Callback     = function(Value) config.minLength = Value end
-})
-
-AITab:CreateSlider({
-    Name         = "🔠 Panjang Kata Maksimum",
-    Range        = {5, 20},
-    Increment    = 1,
-    CurrentValue = config.maxLength,
-    Callback     = function(Value) config.maxLength = Value end
-})
-
-AITab:CreateSection("🎯 STRATEGI")
-
-AITab:CreateParagraph({
-    Title   = "📖 Sistem Scoring",
-    Content =
-        "AI menilai setiap kata dengan skor:\n" ..
-        "• Panjang kata → skor lebih tinggi\n" ..
-        "• Akhiran susah (x, q, z, j, v) → bonus skor\n" ..
-        "• Tujuan: bikin lawan kesulitan cari kata berikutnya"
-})
-
-AITab:CreateToggle({
-    Name         = "🃏 Mode Kata Langka",
-    CurrentValue = false,
-    Callback     = function(Value) config.preferRare = Value end
-})
-
--- ==============================
--- TAB 3: ANTI DETECT
--- ==============================
-local AntiTab = Window:CreateTab("🛡 ANTI DETECT", 4483362458)
-
-AntiTab:CreateSection("🕵 SIMULASI MANUSIA")
-
-AntiTab:CreateParagraph({
-    Title   = "🛡 Cara Kerja Anti-Detect",
-    Content =
-        "• Jeda lebih lama di huruf pertama (simulasi membaca)\n" ..
-        "• Variasi kecepatan di tengah kata panjang\n" ..
-        "• Micro-burst: kadang ketik cepat\n" ..
-        "• Micro-pause: kadang sedikit ragu\n" ..
-        "• Jeda pra-submit: simulasi baca ulang\n\n" ..
-        "⚠ Gunakan delay 400ms+ untuk keamanan optimal"
-})
-
-AntiTab:CreateToggle({
-    Name         = "🛡 Aktifkan Mode Anti-Detect",
-    CurrentValue = true,
-    Callback     = function(Value)
-        config.antiDetectMode = Value
-        Rayfield:Notify({
-            Title    = "🛡 Anti-Detect",
-            Content  = Value and "Anti-Detect AKTIF" or "Anti-Detect NONAKTIF",
-            Duration = 3,
-            Image    = 4483362458
-        })
-    end
-})
-
-AntiTab:CreateSection("⏱ JEDA KETIK")
-
-AntiTab:CreateSlider({
-    Name         = "⌛ Jeda Minimum (ms)",
-    Range        = {50, 600},
-    Increment    = 10,
-    CurrentValue = config.minDelay,
-    Callback     = function(Value) config.minDelay = Value end
-})
-
-AntiTab:CreateSlider({
-    Name         = "⏳ Jeda Maksimum (ms)",
-    Range        = {100, 1200},
-    Increment    = 10,
-    CurrentValue = config.maxDelay,
-    Callback     = function(Value) config.maxDelay = Value end
-})
-
-AntiTab:CreateSection("⚠ PANDUAN DELAY")
-
-AntiTab:CreateParagraph({
-    Title   = "🔴 Level Risiko",
-    Content =
-        "🟢 AMAN       → 500ms – 800ms\n" ..
-        "🟡 SEDANG   → 300ms – 499ms\n" ..
-        "🔴 BERISIKO → 50ms  – 299ms\n\n" ..
-        "Semakin rendah delay, semakin berisiko terdeteksi."
-})
-
--- ==============================
--- TAB 4: STATISTIK
--- ==============================
-local StatsTab = Window:CreateTab("📊 STATISTIK", 4483362458)
-
-StatsTab:CreateSection("🏆 STATISTIK SESI")
-
--- 3 Label terpisah per stat agar Set() pasti bekerja di Rayfield
-local labelKataDikirim = StatsTab:CreateLabel("🔤 Kata Dikirim    : 0")
-local labelKataPanjang = StatsTab:CreateLabel("🏆 Kata Terpanjang : —")
-local labelDurasi      = StatsTab:CreateLabel("⏱ Durasi Sesi     : 0m 0s")
+local labelKataDikirim = BattleTab:CreateLabel("◦  Kata Dikirim    :  0")
+local labelKataPanjang = BattleTab:CreateLabel("◦  Kata Terpanjang :  —")
+local labelDurasi      = BattleTab:CreateLabel("◦  Durasi Sesi     :  0m 0s")
+local labelKataTerpakai = BattleTab:CreateLabel("◦  Riwayat         :  (belum ada)")
 
 local function updateStatsParagraph()
     local elapsed        = os.time() - (stats.sessionStart or os.time())
@@ -583,142 +468,163 @@ local function updateStatsParagraph()
     local seconds        = elapsed % 60
     local longest        = tostring(stats.longestWord or "")
     local displayLongest = (longest ~= "") and longest or "—"
-    pcall(function() labelKataDikirim:Set("🔤 Kata Dikirim    : " .. tostring(stats.totalWords or 0)) end)
-    pcall(function() labelKataPanjang:Set("🏆 Kata Terpanjang : " .. displayLongest) end)
-    pcall(function() labelDurasi:Set("⏱ Durasi Sesi     : " .. tostring(minutes) .. "m " .. tostring(seconds) .. "s") end)
+    pcall(function() labelKataDikirim:Set("◦  Kata Dikirim    :  " .. tostring(stats.totalWords or 0)) end)
+    pcall(function() labelKataPanjang:Set("◦  Kata Terpanjang :  " .. displayLongest) end)
+    pcall(function() labelDurasi:Set("◦  Durasi Sesi     :  " .. tostring(minutes) .. "m " .. tostring(seconds) .. "s") end)
 end
 
-StatsTab:CreateButton({
-    Name     = "🔄 Refresh Statistik",
-    Callback = function()
-        updateStatsParagraph()
-        Rayfield:Notify({
-            Title    = "📊 Statistik",
-            Content  = "Data diperbarui!",
-            Duration = 2,
-            Image    = 4483362458
-        })
-    end
-})
-
-StatsTab:CreateButton({
-    Name     = "🗑 Reset Statistik",
-    Callback = function()
-        stats.totalWords   = 0
-        stats.longestWord  = ""
-        stats.sessionStart = os.time()
-        updateStatsParagraph()
-        Rayfield:Notify({
-            Title    = "🗑 Reset",
-            Content  = "Statistik direset!",
-            Duration = 3,
-            Image    = 4483362458
-        })
-    end
-})
-
-StatsTab:CreateSection("📚 KATA TERPAKAI")
-
--- Label untuk menampilkan kata terpakai (lebih reliable dari Dropdown)
-local labelKataTerpakai = StatsTab:CreateLabel("📚 Kata terpakai: (belum ada)")
-
--- Override addUsedWord agar update label
 local function updateKataLabel()
     local count = #usedWordsList
     if count == 0 then
-        pcall(function() labelKataTerpakai:Set("📚 Kata terpakai: (belum ada)") end)
+        pcall(function() labelKataTerpakai:Set("◦  Riwayat         :  (belum ada)") end)
     else
-        -- Tampilkan 10 kata terakhir
         local display = ""
-        local start = math.max(1, count - 9)
+        local start = math.max(1, count - 7)
         for i = start, count do
             display = display .. usedWordsList[i]
-            if i < count then display = display .. ", " end
+            if i < count then display = display .. "  ·  " end
         end
-        if count > 10 then
-            display = "..." .. display
-        end
-        pcall(function() labelKataTerpakai:Set("📚 [" .. count .. " kata] " .. display) end)
+        if count > 8 then display = "…  " .. display end
+        pcall(function() labelKataTerpakai:Set("◦  Riwayat  [" .. count .. "]  :  " .. display) end)
     end
 end
 
--- Patch addUsedWord untuk update label juga
 local _origAddUsedWord = addUsedWord
 addUsedWord = function(word)
     _origAddUsedWord(word)
     updateKataLabel()
 end
 
--- Patch resetUsedWords untuk update label juga
 local _origResetUsedWords = resetUsedWords
 resetUsedWords = function()
     _origResetUsedWords()
-    pcall(function() labelKataTerpakai:Set("📚 Kata terpakai: (belum ada)") end)
+    pcall(function() labelKataTerpakai:Set("◦  Riwayat         :  (belum ada)") end)
 end
 
-StatsTab:CreateButton({
-    Name     = "🗑 Reset Daftar Kata",
+BattleTab:CreateButton({
+    Name     = "↺  Reset Semua Statistik & Riwayat",
     Callback = function()
-        usedWords     = {}
-        usedWordsList = {}
-        pcall(function() labelKataTerpakai:Set("📚 Kata terpakai: (belum ada)") end)
+        stats.totalWords   = 0
+        stats.longestWord  = ""
+        stats.sessionStart = os.time()
+        usedWords          = {}
+        usedWordsList      = {}
+        updateStatsParagraph()
+        updateKataLabel()
         Rayfield:Notify({
-            Title    = "🗑 Reset",
-            Content  = "Daftar kata direset!",
+            Title    = "↺  Reset",
+            Content  = "Statistik & riwayat direset",
             Duration = 3,
             Image    = 4483362458
         })
     end
 })
 
-StatsTab:CreateSection("🎯 STATUS PERTANDINGAN")
+-- ╔══════════════════════════════╗
+-- ║   TAB 2 — SETTINGS           ║
+-- ║   AI + Anti-Detect + Delay   ║
+-- ╚══════════════════════════════╝
+local SettingsTab = Window:CreateTab("⚙  SETTINGS", 4483362458)
 
-local opponentParagraph    = StatsTab:CreateLabel("👤 Status Lawan: ⏳ Menunggu pertandingan...")
-local startLetterParagraph = StatsTab:CreateLabel("🔤 Huruf Awal Server: —")
-local turnParagraph        = StatsTab:CreateLabel("🎮 Giliran: ⏳ Menunggu...")
+-- ── AI PARAMETER ─────────────────
+SettingsTab:CreateSection("◈  PARAMETER AI")
 
--- ==============================
--- TAB 5: TENTANG
--- ==============================
-local AboutTab = Window:CreateTab("ℹ TENTANG", 4483362458)
-
-AboutTab:CreateSection("📜 INFORMASI")
-
-AboutTab:CreateParagraph({
-    Title   = "🔥 NAKA AUTO KATA v3.1",
-    Content =
-        "Versi  : 3.1\n" ..
-        "Pembuat: NAKA\n\n" ..
-        "Changelog v3.1:\n" ..
-        "• Fix statistik realtime (auto-update tiap event)\n" ..
-        "• Auto Watcher Loop (tidak perlu on/off manual)\n" ..
-        "• Fix safeSet urutan definisi\n" ..
-        "• Fix semua nil paragraph error\n\n" ..
-        "Kamus kata oleh: danzzy1we"
+SettingsTab:CreateSlider({
+    Name         = "⚡  Agresivitas  ( 0 = santai  ·  100 = dominan )",
+    Range        = {0, 100},
+    Increment    = 5,
+    CurrentValue = config.aggression,
+    Callback     = function(Value) config.aggression = Value end
 })
 
-AboutTab:CreateSection("📖 CARA PAKAI")
-
-AboutTab:CreateParagraph({
-    Title   = "🎮 Langkah",
-    Content =
-        "1️⃣ Aktifkan 'Auto Kata' (tab UTAMA)\n" ..
-        "2️⃣ Atur filter akhiran huruf jika perlu\n" ..
-        "3️⃣ Atur kecerdasan AI (tab KECERDASAN AI)\n" ..
-        "4️⃣ Masuk ke pertandingan\n" ..
-        "5️⃣ AI otomatis bermain saat giliran kamu!"
+SettingsTab:CreateSlider({
+    Name         = "↓  Panjang Kata Minimum",
+    Range        = {2, 6},
+    Increment    = 1,
+    CurrentValue = config.minLength,
+    Callback     = function(Value) config.minLength = Value end
 })
 
-AboutTab:CreateSection("⚠ CATATAN")
-
-AboutTab:CreateParagraph({
-    Title   = "🛑 Penting",
-    Content =
-        "• Gunakan internet stabil\n" ..
-        "• Delay 500ms+ sangat disarankan\n" ..
-        "• Filter akhiran auto-fallback jika tidak ada kata\n" ..
-        "• Jika error → jalankan ulang script"
+SettingsTab:CreateSlider({
+    Name         = "↑  Panjang Kata Maksimum",
+    Range        = {5, 20},
+    Increment    = 1,
+    CurrentValue = config.maxLength,
+    Callback     = function(Value) config.maxLength = Value end
 })
+
+-- ── ANTI DETECT ──────────────────
+SettingsTab:CreateSection("◈  ANTI-DETECT")
+
+SettingsTab:CreateToggle({
+    Name         = "🛡  Mode Anti-Detect  ( Simulasi Manusia )",
+    CurrentValue = true,
+    Callback     = function(Value)
+        config.antiDetectMode = Value
+        Rayfield:Notify({
+            Title    = "🛡  Anti-Detect",
+            Content  = Value and "ON — pola ketik manusia aktif" or "OFF — ketik langsung",
+            Duration = 3,
+            Image    = 4483362458
+        })
+    end
+})
+
+SettingsTab:CreateSlider({
+    Name         = "⌛  Delay Minimum  ( ms )",
+    Range        = {50, 600},
+    Increment    = 10,
+    CurrentValue = config.minDelay,
+    Callback     = function(Value) config.minDelay = Value end
+})
+
+SettingsTab:CreateSlider({
+    Name         = "⏳  Delay Maksimum  ( ms )",
+    Range        = {100, 1200},
+    Increment    = 10,
+    CurrentValue = config.maxDelay,
+    Callback     = function(Value) config.maxDelay = Value end
+})
+
+SettingsTab:CreateSection("◈  PANDUAN DELAY")
+
+SettingsTab:CreateLabel("🟢  AMAN        →  500ms – 800ms")
+SettingsTab:CreateLabel("🟡  SEDANG    →  300ms – 499ms")
+SettingsTab:CreateLabel("🔴  BERISIKO  →  50ms  – 299ms")
+
+-- ╔══════════════════════════════╗
+-- ║   TAB 3 — INFO               ║
+-- ║   Tentang + Cara Pakai       ║
+-- ╚══════════════════════════════╝
+local InfoTab = Window:CreateTab("📋  INFO", 4483362458)
+
+InfoTab:CreateSection("◈  TENTANG SCRIPT")
+
+InfoTab:CreateLabel("⚔   NAKA AUTO KATA  —  v4.0")
+InfoTab:CreateLabel("◦   Pembuat   :  NAKA")
+InfoTab:CreateLabel("◦   Kamus     :  80.000+ kata Indonesia")
+InfoTab:CreateLabel("◦   Library   :  danzzy1we")
+
+InfoTab:CreateSection("◈  CARA PAKAI")
+
+InfoTab:CreateLabel("1️⃣   Buka tab BATTLE")
+InfoTab:CreateLabel("2️⃣   Aktifkan  ⚡ Auto Kata")
+InfoTab:CreateLabel("3️⃣   Set filter akhiran jika perlu")
+InfoTab:CreateLabel("4️⃣   Masuk pertandingan")
+InfoTab:CreateLabel("5️⃣   AI otomatis bermain!")
+
+InfoTab:CreateSection("◈  TIPS MENANG")
+
+InfoTab:CreateLabel("💀   Aktifkan TRAP MODE untuk dominasi")
+InfoTab:CreateLabel("⚡   Agresivitas 80–100 = pilih kata terpanjang")
+InfoTab:CreateLabel("🛡   Delay 500ms+ agar tidak terdeteksi")
+InfoTab:CreateLabel("🔡   Pilih multi akhiran untuk variasi trap")
+
+InfoTab:CreateSection("◈  CATATAN")
+
+InfoTab:CreateLabel("◦   Gunakan koneksi internet stabil")
+InfoTab:CreateLabel("◦   Jika stuck → jalankan ulang script")
+InfoTab:CreateLabel("◦   Filter akhiran auto-fallback jika kosong")
 
 -- =========================
 -- STATS AUTO-UPDATE LOOP
@@ -802,4 +708,4 @@ MatchUI.OnClientEvent:Connect(onMatchUI)
 BillboardUpdate.OnClientEvent:Connect(onBillboard)
 UsedWordWarn.OnClientEvent:Connect(onUsedWarn)
 
-print("NAKA AUTO KATA v3.1 — LOADED SUCCESSFULLY")
+print("NAKA AUTO KATA v4.0 — LOADED SUCCESSFULLY")
