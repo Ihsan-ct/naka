@@ -561,18 +561,49 @@ StatsTab:CreateButton({
 
 StatsTab:CreateSection("📚 KATA TERPAKAI")
 
-usedWordsDropdown = StatsTab:CreateDropdown({
-    Name            = "📚 Daftar Kata Terpakai",
-    Options         = {" "},
-    CurrentOption   = {},
-    MultipleOptions = false,
-    Callback        = function() end
-})
+-- Label untuk menampilkan kata terpakai (lebih reliable dari Dropdown)
+local labelKataTerpakai = StatsTab:CreateLabel("📚 Kata terpakai: (belum ada)")
+
+-- Override addUsedWord agar update label
+local function updateKataLabel()
+    local count = #usedWordsList
+    if count == 0 then
+        pcall(function() labelKataTerpakai:Set("📚 Kata terpakai: (belum ada)") end)
+    else
+        -- Tampilkan 10 kata terakhir
+        local display = ""
+        local start = math.max(1, count - 9)
+        for i = start, count do
+            display = display .. usedWordsList[i]
+            if i < count then display = display .. ", " end
+        end
+        if count > 10 then
+            display = "..." .. display
+        end
+        pcall(function() labelKataTerpakai:Set("📚 [" .. count .. " kata] " .. display) end)
+    end
+end
+
+-- Patch addUsedWord untuk update label juga
+local _origAddUsedWord = addUsedWord
+addUsedWord = function(word)
+    _origAddUsedWord(word)
+    updateKataLabel()
+end
+
+-- Patch resetUsedWords untuk update label juga
+local _origResetUsedWords = resetUsedWords
+resetUsedWords = function()
+    _origResetUsedWords()
+    pcall(function() labelKataTerpakai:Set("📚 Kata terpakai: (belum ada)") end)
+end
 
 StatsTab:CreateButton({
     Name     = "🗑 Reset Daftar Kata",
     Callback = function()
-        resetUsedWords()
+        usedWords     = {}
+        usedWordsList = {}
+        pcall(function() labelKataTerpakai:Set("📚 Kata terpakai: (belum ada)") end)
         Rayfield:Notify({
             Title    = "🗑 Reset",
             Content  = "Daftar kata direset!",
