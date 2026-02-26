@@ -212,17 +212,18 @@ local function isUsed(word)
 end
 
 local function addUsedWord(word)
-    local w = string.lower(word)
+    if not word then return end
+    local w = string.lower(tostring(word))
     if usedWords[w] == nil then
         usedWords[w] = true
-        table.insert(usedWordsList, word)
+        table.insert(usedWordsList, w)
         if usedWordsDropdown ~= nil then
             usedWordsDropdown:Set(usedWordsList)
         end
-        -- Update statistik
-        stats.totalWords = stats.totalWords + 1
-        if string.len(word) > string.len(stats.longestWord) then
-            stats.longestWord = word
+        stats.totalWords = (stats.totalWords or 0) + 1
+        local longest = tostring(stats.longestWord or "")
+        if string.len(w) > string.len(longest) then
+            stats.longestWord = w
         end
     end
 end
@@ -231,7 +232,7 @@ local function resetUsedWords()
     usedWords = {}
     usedWordsList = {}
     if usedWordsDropdown ~= nil then
-        usedWordsDropdown:Set({})
+        usedWordsDropdown:Set({""})  -- Rayfield butuh minimal 1 item non-nil
     end
 end
 
@@ -573,14 +574,16 @@ local statsParagraph = StatsTab:CreateParagraph({
 })
 
 local function updateStatsParagraph()
-    local elapsed = os.time() - stats.sessionStart
+    local elapsed = os.time() - (stats.sessionStart or os.time())
     local minutes = math.floor(elapsed / 60)
     local seconds = elapsed % 60
+    local longest = tostring(stats.longestWord or "")
+    local displayLongest = (longest ~= "") and longest or "—"
     statsParagraph:Set(
         "📈 Performa Sesi Ini",
-        "🔤 Kata Dikirim  : " .. stats.totalWords .. "\n" ..
-        "🏆 Kata Terpanjang : " .. (stats.longestWord ~= "" and stats.longestWord or "—") .. "\n" ..
-        "⏱ Durasi Sesi    : " .. minutes .. "m " .. seconds .. "s"
+        "🔤 Kata Dikirim    : " .. tostring(stats.totalWords or 0) .. "\n" ..
+        "🏆 Kata Terpanjang : " .. displayLongest .. "\n" ..
+        "⏱ Durasi Sesi     : " .. tostring(minutes) .. "m " .. tostring(seconds) .. "s"
     )
 end
 
@@ -734,17 +737,19 @@ local function onMatchUI(cmd, value)
         turnParagraph:Set("🎮 Giliran", "⏳ Giliran lawan...")
 
     elseif cmd == "UpdateServerLetter" then
-        serverLetter = value or ""
-        startLetterParagraph:Set("🔤 Huruf Awal Server", "Huruf: " .. string.upper(serverLetter))
+        serverLetter = tostring(value or "")
+        local displayLetter = (serverLetter ~= "") and string.upper(serverLetter) or "—"
+        startLetterParagraph:Set("🔤 Huruf Awal Server", "Huruf: " .. displayLetter)
     end
 end
 
 local function onBillboard(word)
     if matchActive and not isMyTurn then
-        opponentStreamWord = word or ""
+        opponentStreamWord = tostring(word or "")
+        local displayWord = (opponentStreamWord ~= "") and opponentStreamWord or "..."
         opponentParagraph:Set(
             "👤 Status Lawan",
-            "✍ Lawan mengetik: " .. opponentStreamWord
+            "✍ Lawan mengetik: " .. displayWord
         )
     end
 end
