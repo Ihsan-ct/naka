@@ -986,6 +986,20 @@ T3:CreateButton({ Name="🌾  Cek Area Tanam", Callback=function()
         Duration = 4, Image = 4483362458
     })
 end })
+T3:CreateButton({
+    Name = "📋  Scan SEMUA RemoteEvent",
+    Callback = function()
+        local all = scanAllRemotes()
+        local count = 0
+        for name, _ in pairs(all) do
+            count = count + 1
+        end
+        Rayfield:Notify({
+            Title = "Scan Selesai",
+            Content = "Ditemukan " .. count .. " RemoteEvent di dalam ReplicatedStorage.",
+            Duration = 5, Image = 4483362458
+        })
+    end 
 
 -- ── TAB 4: INFO ────────────────────────────────────────
 local T4 = Win:CreateTab("📋  Info", 4483362458)
@@ -1020,3 +1034,5 @@ T4:CreateLabel("◦   Game  :  Sawah Indo")
 -- ============================
 startAFK()
 print("[NAKA AUTO FARM v3.0] Sawah Indo — LOADED")
+
+})
