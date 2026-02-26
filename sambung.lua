@@ -776,128 +776,84 @@ local function updateBombStock()
     end)
 end
 
--- =========================
--- SCORING SYSTEM
--- =========================
 -- =========================================
--- AUTO KATA Ultimate Tier SSSSS
--- Daftar Kata Umum Bahasa Indonesia ~5000+
+-- DAFTAR KATA UMUM SUPER LENGKAP
 -- =========================================
 local COMMON_WORDS = {
-    -- kata dasar & aktivitas umum
-    makan=true, minum=true, tidur=true, bangun=true, pergi=true, pulang=true,
-    duduk=true, berdiri=true, jalan=true, lari=true, berjalan=true, berhenti=true,
-    bekerja=true, belajar=true, membaca=true, menulis=true, berbicara=true,
-    mendengar=true, melihat=true, berpikir=true, mencipta=true, mencoba=true,
-    bermain=true, menang=true, kalah=true, menangis=true, tertawa=true,
-    membantu=true, memasak=true, membersihkan=true, mencuci=true, berbelanja=true,
-    memelihara=true, berkendara=true, berenang=true, bersepeda=true, berlari=true,
-    mendaki=true, bercakap=true, beristirahat=true, berbelok=true, bertanya=true,
-    menjawab=true, berdiskusi=true, bersantai=true, berjoging=true, bersantai=true,
-    menikmati=true, menunggu=true, datang=true, pergi=true, kembali=true,
+    -- Kata kerja dasar
+    makan=true, minum=true, tidur=true, bangun=true, pergi=true,
+    pulang=true, duduk=true, jalan=true, lari=true, main=true,
+    baca=true, tulis=true, lihat=true, dengar=true, bicara=true,
+    mandi=true, cuci=true, datang=true, cari=true, belajar=true,
+    bekerja=true, menulis=true, membaca=true, bermain=true,
+    menangis=true, tertawa=true, membantu=true, memasak=true,
+    membersihkan=true, tidursiang=true, belanja=true, memelihara=true,
 
-    -- kata benda / objek umum
-    rumah=true, sekolah=true, pasar=true, taman=true, kamar=true, dapur=true,
-    kamar mandi=true, ruang keluarga=true, ruang tamu=true, kolam=true, lapangan=true,
-    meja=true, kursi=true, pintu=true, jendela=true, lemari=true, rak=true,
-    kamar tidur=true, sepeda=true, motor=true, mobil=true, bus=true,
-    kereta=true, pesawat=true, kapal=true,
-    nasi=true, lauk=true, sayur=true, buah=true, makanan=true, minuman=true,
-    kopi=true, teh=true, air=true, jus=true, es=true, kue=true, roti=true,
-    baju=true, celana=true, jaket=true, kaos=true, sepatu=true, sandal=true,
-    tas=true, dompet=true, jam tangan=true, kacamata=true,
-    teman=true, sahabat=true, keluarga=true, orang=true, anak=true,
-    ibu=true, bapak=true, kakak=true, adik=true, nenek=true, kakek=true,
-    guru=true, dokter=true, perawat=true, polisi=true, petugas=true,
-    hewan=true, binatang=true, anjing=true, kucing=true, burung=true,
-    ikan=true, tanaman=true, pohon=true, bunga=true, rumput=true,
-    cuaca=true, hujan=true, petir=true, angin=true, panas=true, dingin=true,
+    -- Kata benda sehari-hari
+    rumah=true, sekolah=true, pasar=true, taman=true, kamar=true,
+    dapur=true, meja=true, kursi=true, pintu=true, jendela=true,
+    nasi=true, baju=true, sepatu=true, mobil=true, motor=true,
+    uang=true, teman=true, keluarga=true, orang=true, ibu=true,
+    bapak=true, kakak=true, adik=true, pohon=true, bunga=true,
+    hujan=true, makanan=true, minuman=true, tempat=true,
+    alam=true, liburan=true, aktivitas=true, perjalanan=true,
+    pelajaran=true, kesehatan=true, pekerjaan=true, masalah=true,
+    solusi=true, pikiran=true, cinta=true, sayang=true,
+    kebahagiaan=true, kesenangan=true, teman2=true, keluarga2=true,
 
-    -- kata sifat / kualitas
+    -- Kata sifat / kualitas
     besar=true, kecil=true, panjang=true, pendek=true, cepat=true,
-    lambat=true, bagus=true, buruk=true, enak=true, tidak enak=true,
-    manis=true, asin=true, pedas=true, pahit=true, harum=true, bau=true,
-    indah=true, cantik=true, tampan=true, kuat=true, lemah=true,
-    baru=true, tua=true, muda=true, tua=true,
-    tinggi=true, rendah=true, murah=true, mahal=true, sulit=true,
-    mudah=true, ringan=true, berat=true, senang=true, sedih=true,
-    bingung=true, marah=true, tenang=true, lelah=true, lapar=true,
-    haus=true, sehat=true, sakit=true, bahagia=true, kecewa=true,
+    lambat=true, bagus=true, buruk=true, senang=true, sedih=true,
+    pintar=true, bodoh=true, rajin=true, malas=true, murah=true,
+    mahal=true, baru=true, lama=true, hangat=true, dingin=true,
+    enak=true, pedas=true, manis=true, asin=true, segar=true,
 
-    -- kata keterangan / penghubung
-    sudah=true, belum=true, sedang=true, sering=true, selalu=true,
-    kadang=true, terkadang=true, baru saja=true, akhir=true, awal=true,
-    kemudian=true, lalu=true, karena=true, supaya=true, tetapi=true,
-    dengan=true, untuk=true, kepada=true, setelah=true, sebelum=true,
-    ketika=true, sampai=true, sekitar=true, hampir=true, sebenarnya=true,
-    meskipun=true, apalagi=true, namun=true, dan=true, atau=true, tapi=true,
-    serta=true, bahkan=true, termasuk=true,
+    -- Kata keterangan / penghubung
+    sudah=true, belum=true, sedang=true, selalu=true, sering=true,
+    kadang=true, hampir=true, masih=true, terus=true, kembali=true,
+    ternyata=true, karena=true, supaya=true, tetapi=true, dengan=true,
+    untuk=true, kepada=true, sangat=true, sekali=true, biasanya=true,
 
-    -- kata tempat / lokasi
-    sekolahdasar=true, sekolahmenengah=true, universitas=true,
-    kampus=true, perpustakaan=true, museum=true, restoran=true,
-    kafe=true, warung=true, pusat perbelanjaan=true, rumahsakit=true,
-    stasiun=true, terminal=true, bandara=true, pelabuhan=true,
-    jalanraya=true, pasartradisional=true, pasarmodern=true,
-    mall=true, kantor=true, pabrik=true, kebun=true, pertanian=true,
-    hutan=true, gunung=true, pantai=true, sungai=true, danau=true,
-    pulau=true, desa=true, kota=true, ibukota=true,
-
-    -- kata media / teknologi / hiburan
-    televisi=true, radio=true, internet=true, komputer=true,
-    smartphone=true, aplikasi=true, permainan=true, game=true,
-    video=true, foto=true, musik=true, film=true, buku=true,
-    cerita=true, berita=true, sosial=true, media=true, blog=true,
-    vlog=true, channel=true, konten=true, youtuber=true,
-    instagram=true, tiktok=true, twitter=true, facebook=true,
-
-    -- kata hobi / lifestyle
-    olahraga=true, sepakbola=true, basket=true, tenis=true,
-    bulutangkis=true, renang=true, lariPagi=true, yoga=true,
-    fitness=true, hiking=true, berkebun=true, memasaklangsung=true,
-    memancing=true, fotografi=true, melukis=true, menuliscerita=true,
-    membacaNovel=true, travel=true, wisataalam=true, kuliner=true,
-    pesta=true, konser=true, festival=true, acara=true,
-
-    -- istilah umum lain
-    uangtunai=true, kartu=true, tiket=true, paspor=true,
-    visa=true, nyaman=true, unik=true, populer=true,
-    terkenal=true, berkualitas=true, premium=true, terbaik=true,
-    terburuk=true, favorit=true, klasik=true, modern=true,
-    tradisional=true, global=true, lokal=true, internasional=true,
-    sehatwal=true, sehatjiwa=true,
-
-    -- .. generik tambahan (otomatis)
-    sekolahuniversitas=true, permainanvideo=true, liburanpanjang=true,
-    kendaraanpribadi=true, kendaraanumum=true, transportasiumum=true,
-    alatkomunikasi=true, alatmusik=true, alatolahraga=true,
-    minumansegar=true, makananlezat=true, peralatanrumah=true,
-    peralatanmakan=true, peralatanbelajar=true
+    -- Kata tambahan populer
+    olahraga=true, musik=true, film=true, buku=true, cerita=true,
+    berita=true, teknologi=true, komputer=true, handphone=true,
+    internet=true, media=true, sosial=true, temanonline=true,
+    game=true, video=true, foto=true, gambar=true, lagu=true,
+    makananringan=true, minumankeras=true, minumanringan=true,
+    kendaraan=true, transportasi=true, wisata=true, kota=true,
+    desa=true, sungai=true, gunung=true, laut=true, pantai=true,
+    sekolahdasar=true, sekolahmenengah=true, universitas=true
 }
 
+-- =========================================
+-- HURUF AKHIR SULIT
+-- =========================================
 local HARD_ENDINGS = {
     ["x"]=10, ["q"]=10, ["f"]=8, ["v"]=8,
     ["z"]=9, ["y"]=6, ["w"]=5, ["j"]=7,
     ["k"]=4, ["h"]=3
 }
 
+-- =========================================
+-- FUNGSI PENILAIAN KATA
+-- =========================================
 local function scoreWord(word)
     local score = 0
     local len   = #word
 
-    -- ★ bonus kata umum super besar
-    if COMMON_WORDS[word] then score = score + 80 end
+    -- bonus kata umum
+    if COMMON_WORDS[word] then score = score + 50 end
 
-    -- ★ panjang kata
+    -- panjang kata
     score = score + len
 
-    -- ★ bonus panjang ekstra
-    if len >= 12 then score = score + 12
-    elseif len >= 9 then score = score + 8
-    elseif len >= 6 then score = score + 4
+    -- bonus panjang ekstra
+    if len >= 12 then score = score + 7
+    elseif len >= 9 then score = score + 4
+    elseif len >= 6 then score = score + 2
     end
 
-    -- ★ bonus huruf akhir sulit
+    -- bonus huruf akhir sulit
     local lastChar = string.sub(word, -1)
     if HARD_ENDINGS[lastChar] then
         score = score + HARD_ENDINGS[lastChar]
