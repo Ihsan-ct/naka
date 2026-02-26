@@ -341,11 +341,12 @@ end)
 -- BUILD UI — LINORIA
 -- =========================
 local Window = Library:CreateWindow({
-    Title       = 'NAKA  ⚔  AUTO KATA',
-    Center      = true,
-    AutoShow    = true,
-    TabPadding  = 8,
+    Title        = 'NAKA  ⚔  AUTO KATA',
+    Center       = true,
+    AutoShow     = true,
+    TabPadding   = 8,
     MenuFadeTime = 0.2,
+    MenuKeybind  = 'J',   -- Tekan J untuk buka/tutup UI
 })
 
 local Tabs = {
@@ -553,6 +554,9 @@ AboutBox:AddLabel('Pembuat   :  NAKA')
 AboutBox:AddLabel('Kamus     :  80.000+ kata Indonesia')
 AboutBox:AddLabel('UI        :  LinoriaLib')
 AboutBox:AddLabel('Wordlist  :  danzzy1we')
+AboutBox:AddDivider()
+AboutBox:AddLabel('⌨  Keybind')
+AboutBox:AddLabel('[ J ]  →  Buka / Tutup UI')
 
 local GuideBox = Tabs.Info:AddRightGroupbox('◈  Cara Pakai')
 
@@ -566,6 +570,7 @@ GuideBox:AddLabel('💀  TRAP MODE = dominasi total')
 GuideBox:AddLabel('⚡  Agresivitas 80+ = kata terpanjang')
 GuideBox:AddLabel('🛡  Delay 500ms+ = paling aman')
 GuideBox:AddLabel('🔡  Multi akhiran = variasi trap')
+GuideBox:AddLabel('[ J ]  = sembunyikan UI saat diperlukan')
 
 -- =========================
 -- THEME & SAVE MANAGER
@@ -574,21 +579,39 @@ ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 
 SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({'MenuKeybind'})
+SaveManager:SetIgnoreIndexes({})
 
 ThemeManager:SetFolder('NAKA')
 SaveManager:SetFolder('NAKA/AutoKata')
 
--- Tab UI Settings untuk theme
+-- Tab Theme + Keybind
 local UISettingsTab = Window:AddTab('🎨  Theme')
-local MenuGroup     = UISettingsTab:AddLeftGroupbox('Theme')
+
+local KeybindBox = UISettingsTab:AddLeftGroupbox('◈  Keybind')
+KeybindBox:AddLabel('Buka / Tutup UI')
+KeybindBox:AddKeybind('MenuKeybind', {
+    Text    = 'Toggle UI',
+    Default = 'J',
+    Tooltip = 'Tekan tombol ini untuk buka/tutup UI',
+    Callback = function(Value)
+        -- Linoria handle toggle UI otomatis via MenuKeybind
+    end
+})
+
+local MenuGroup = UISettingsTab:AddRightGroupbox('◈  Theme')
 ThemeManager:ApplyToGroupbox(MenuGroup)
 
-local SaveGroup = UISettingsTab:AddRightGroupbox('Config')
+local SaveGroup = UISettingsTab:AddLeftGroupbox('◈  Config')
 SaveManager:AddIgnoreButton(SaveGroup)
 SaveManager:AddSaveSection(SaveGroup)
 
 SaveManager:LoadAutoloadConfig()
+
+-- Hubungkan keybind J ke toggle UI
+Library.Toggleable = true
+Options.MenuKeybind:OnChanged(function()
+    Library:SetVisible(not Library.Visible)
+end)
 
 -- =========================
 -- REMOTE EVENT HANDLERS
