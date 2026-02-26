@@ -573,18 +573,26 @@ local statsParagraph = StatsTab:CreateParagraph({
     Content = "⏳ Belum ada data..."
 })
 
+-- safeSet: wrapper aman untuk Rayfield Paragraph:Set(content)
+-- Rayfield hanya terima 1 argumen string, bukan 2
+local function safeSet(paragraph, content)
+    local safe = tostring(content or "")
+    pcall(function()
+        paragraph:Set(safe)
+    end)
+end
+
 local function updateStatsParagraph()
     local elapsed = os.time() - (stats.sessionStart or os.time())
     local minutes = math.floor(elapsed / 60)
     local seconds = elapsed % 60
     local longest = tostring(stats.longestWord or "")
     local displayLongest = (longest ~= "") and longest or "—"
-    statsParagraph:Set(
-        "📈 Performa Sesi Ini",
+    local content =
         "🔤 Kata Dikirim    : " .. tostring(stats.totalWords or 0) .. "\n" ..
         "🏆 Kata Terpanjang : " .. displayLongest .. "\n" ..
         "⏱ Durasi Sesi     : " .. tostring(minutes) .. "m " .. tostring(seconds) .. "s"
-    )
+    safeSet(statsParagraph, content)
 end
 
 StatsTab:CreateButton({
@@ -712,34 +720,34 @@ local function onMatchUI(cmd, value)
         matchActive = true
         isMyTurn    = false
         resetUsedWords()
-        turnParagraph:Set("🎮 Giliran", "⏳ Menunggu giliran...")
-        opponentParagraph:Set("👤 Status Lawan", "👀 Pertandingan dimulai!")
+        safeSet(turnParagraph,     "⏳ Menunggu giliran...")
+        safeSet(opponentParagraph, "👀 Pertandingan dimulai!")
 
     elseif cmd == "HideMatchUI" then
         matchActive  = false
         isMyTurn     = false
         serverLetter = ""
         resetUsedWords()
-        turnParagraph:Set("🎮 Giliran", "❌ Pertandingan selesai")
-        opponentParagraph:Set("👤 Status Lawan", "⏳ Menunggu pertandingan...")
-        startLetterParagraph:Set("🔤 Huruf Awal Server", "—")
+        safeSet(turnParagraph,        "❌ Pertandingan selesai")
+        safeSet(opponentParagraph,    "⏳ Menunggu pertandingan...")
+        safeSet(startLetterParagraph, "Huruf: —")
         updateStatsParagraph()
 
     elseif cmd == "StartTurn" then
         isMyTurn = true
-        turnParagraph:Set("🎮 Giliran", "✅ GILIRAN KAMU!")
+        safeSet(turnParagraph, "✅ GILIRAN KAMU!")
         if autoEnabled then
             task.spawn(startUltraAI)
         end
 
     elseif cmd == "EndTurn" then
         isMyTurn = false
-        turnParagraph:Set("🎮 Giliran", "⏳ Giliran lawan...")
+        safeSet(turnParagraph, "⏳ Giliran lawan...")
 
     elseif cmd == "UpdateServerLetter" then
         serverLetter = tostring(value or "")
         local displayLetter = (serverLetter ~= "") and string.upper(serverLetter) or "—"
-        startLetterParagraph:Set("🔤 Huruf Awal Server", "Huruf: " .. displayLetter)
+        safeSet(startLetterParagraph, "Huruf: " .. displayLetter)
     end
 end
 
@@ -747,10 +755,7 @@ local function onBillboard(word)
     if matchActive and not isMyTurn then
         opponentStreamWord = tostring(word or "")
         local displayWord = (opponentStreamWord ~= "") and opponentStreamWord or "..."
-        opponentParagraph:Set(
-            "👤 Status Lawan",
-            "✍ Lawan mengetik: " .. displayWord
-        )
+        safeSet(opponentParagraph, "✍ Lawan mengetik: " .. displayWord)
     end
 end
 
