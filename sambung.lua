@@ -776,89 +776,25 @@ local function updateBombStock()
     end)
 end
 
--- =========================================
--- DAFTAR KATA UMUM SUPER LENGKAP
--- =========================================
-local COMMON_WORDS = {
-    -- Kata kerja dasar
-    makan=true, minum=true, tidur=true, bangun=true, pergi=true,
-    pulang=true, duduk=true, jalan=true, lari=true, main=true,
-    baca=true, tulis=true, lihat=true, dengar=true, bicara=true,
-    mandi=true, cuci=true, datang=true, cari=true, belajar=true,
-    bekerja=true, menulis=true, membaca=true, bermain=true,
-    menangis=true, tertawa=true, membantu=true, memasak=true,
-    membersihkan=true, tidursiang=true, belanja=true, memelihara=true,
-
-    -- Kata benda sehari-hari
-    rumah=true, sekolah=true, pasar=true, taman=true, kamar=true,
-    dapur=true, meja=true, kursi=true, pintu=true, jendela=true,
-    nasi=true, baju=true, sepatu=true, mobil=true, motor=true,
-    uang=true, teman=true, keluarga=true, orang=true, ibu=true,
-    bapak=true, kakak=true, adik=true, pohon=true, bunga=true,
-    hujan=true, makanan=true, minuman=true, tempat=true,
-    alam=true, liburan=true, aktivitas=true, perjalanan=true,
-    pelajaran=true, kesehatan=true, pekerjaan=true, masalah=true,
-    solusi=true, pikiran=true, cinta=true, sayang=true,
-    kebahagiaan=true, kesenangan=true, teman2=true, keluarga2=true,
-
-    -- Kata sifat / kualitas
-    besar=true, kecil=true, panjang=true, pendek=true, cepat=true,
-    lambat=true, bagus=true, buruk=true, senang=true, sedih=true,
-    pintar=true, bodoh=true, rajin=true, malas=true, murah=true,
-    mahal=true, baru=true, lama=true, hangat=true, dingin=true,
-    enak=true, pedas=true, manis=true, asin=true, segar=true,
-
-    -- Kata keterangan / penghubung
-    sudah=true, belum=true, sedang=true, selalu=true, sering=true,
-    kadang=true, hampir=true, masih=true, terus=true, kembali=true,
-    ternyata=true, karena=true, supaya=true, tetapi=true, dengan=true,
-    untuk=true, kepada=true, sangat=true, sekali=true, biasanya=true,
-
-    -- Kata tambahan populer
-    olahraga=true, musik=true, film=true, buku=true, cerita=true,
-    berita=true, teknologi=true, komputer=true, handphone=true,
-    internet=true, media=true, sosial=true, temanonline=true,
-    game=true, video=true, foto=true, gambar=true, lagu=true,
-    makananringan=true, minumankeras=true, minumanringan=true,
-    kendaraan=true, transportasi=true, wisata=true, kota=true,
-    desa=true, sungai=true, gunung=true, laut=true, pantai=true,
-    sekolahdasar=true, sekolahmenengah=true, universitas=true
-}
-
--- =========================================
--- HURUF AKHIR SULIT
--- =========================================
+-- =========================
+-- SCORING SYSTEM
+-- =========================
 local HARD_ENDINGS = {
     ["x"]=10, ["q"]=10, ["f"]=8, ["v"]=8,
-    ["z"]=9, ["y"]=6, ["w"]=5, ["j"]=7,
-    ["k"]=4, ["h"]=3
+    ["z"]=9,  ["y"]=6,  ["w"]=5, ["j"]=7,
+    ["k"]=4,  ["h"]=3,
 }
 
--- =========================================
--- FUNGSI PENILAIAN KATA
--- =========================================
 local function scoreWord(word)
     local score = 0
     local len   = #word
-
-    -- bonus kata umum
-    if COMMON_WORDS[word] then score = score + 50 end
-
-    -- panjang kata
-    score = score + len
-
-    -- bonus panjang ekstra
-    if len >= 12 then score = score + 7
-    elseif len >= 9 then score = score + 4
-    elseif len >= 6 then score = score + 2
-    end
-
-    -- bonus huruf akhir sulit
+    score = score + (len * 2)
+    if len >= 9  then score = score + 15 end
+    if len >= 12 then score = score + 20 end
     local lastChar = string.sub(word, -1)
     if HARD_ENDINGS[lastChar] then
         score = score + HARD_ENDINGS[lastChar]
     end
-
     return score
 end
 
