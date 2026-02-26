@@ -39,7 +39,7 @@ if Rayfield == nil then warn("Rayfield return nil") return end
 -- Key dengan value "" = belum terikat device (akan otomatis terikat)
 -- Key dengan value berisi HWID = sudah terikat, cek HWID harus cocok
 -- =========================
-local KEY_DATABASE_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/keys.json"
+local KEY_DATABASE_URL = "https://raw.githubusercontent.com/Ihsan-ct/naka/refs/heads/main/keys.json"
 -- ↑ GANTI dengan URL database key kamu!
 -- Format keys.json:
 -- {
@@ -49,7 +49,7 @@ local KEY_DATABASE_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/k
 -- Value "" = key aktif, belum terikat device
 -- Value "HWID_STRING" = sudah terikat device tertentu
 
-local BIND_ENDPOINT_URL = "https://script.google.com/macros/s/YOUR_GOOGLE_APPS_SCRIPT_ID/exec"
+local BIND_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbxJEVTEuVV6Aa9lHo4pHrQ8RRbypTqCcGiUtsYdan4JnFTs964Sq73coAojyLkjg1IXDg/exec"
 -- ↑ OPSIONAL: URL Google Apps Script untuk auto-bind HWID ke key
 -- Jika tidak pakai, binding dilakukan manual oleh admin
 
