@@ -68,36 +68,89 @@ local AREA = {
 -- ============================
 -- FIND REMOTES
 -- ============================
+
+-- Tunggu folder Remotes siap
+local RemotesFolder = RS:WaitForChild("Remotes", 10)
+
 local function findRE(...)
     for _, name in ipairs({...}) do
+        -- Cari di seluruh RS secara rekursif
         local r = RS:FindFirstChild(name, true)
         if r and r:IsA("RemoteEvent") then return r end
+        -- Cari di workspace
         r = workspace:FindFirstChild(name, true)
         if r and r:IsA("RemoteEvent") then return r end
     end
     return nil
 end
 
-local function findRF(...)
+-- ── REMOTE YANG SUDAH DIKETAHUI (dari screenshot) ──────────────────
+-- RE_Plant   = ReplicatedStorage.Remotes.TutorialRemotes.PlantCrop  ✅
+-- RE_Harvest = ReplicatedStorage.Remotes.TutorialRemotes.HarvestCrop ✅
+-- RE_Buy     = ❌ belum ketemu — scan semua folder
+-- RE_Sell    = ❌ belum ketemu — scan semua folder
+
+-- Cari folder TutorialRemotes / GameRemotes / ShopRemotes dll
+local function findRemoteFolder(...)
     for _, name in ipairs({...}) do
-        local r = RS:FindFirstChild(name, true)
-        if r and r:IsA("RemoteFunction") then return r end
+        local f = RS:FindFirstChild(name, true)
+        if f then return f end
     end
     return nil
 end
 
--- Remote Events — nama umum farming game Roblox
-local RE_Plant   = findRE("PlantSeed","Plant","TanamBibit","Tanam","PlantCrop")
-local RE_Harvest = findRE("HarvestCrop","Harvest","PanenTanaman","Panen","HarvestAll")
-local RE_Buy     = findRE("BuyItem","BuySeed","BeliItem","BeliBibit","Buy","PurchaseItem")
-local RE_Sell    = findRE("SellItem","SellAll","JualItem","Sell","SellCrops","SellHarvest")
-local RE_Equip   = findRE("EquipTool","Equip","EquipItem","EquipSeed")
+-- Hardcode path yang sudah diketahui
+local TutRemotes = findRemoteFolder("TutorialRemotes","GameRemotes","Remotes")
+
+local RE_Plant   = RS:FindFirstChild("PlantCrop",   true)
+                or findRE("PlantSeed","Plant","Tanam","TanamBibit")
+
+local RE_Harvest = RS:FindFirstChild("HarvestCrop", true)
+                or findRE("HarvestAll","Harvest","Panen","PanenSemua")
+
+-- Buy & Sell — cari di SEMUA subfolder Remotes
+local RE_Buy, RE_Sell
+
+-- Scan semua RemoteEvent di RS
+local function scanAllRemotes()
+    local all = {}
+    for _, obj in ipairs(RS:GetDescendants()) do
+        if obj:IsA("RemoteEvent") then
+            all[obj.Name] = obj
+            print("[AUTOFARM SCAN] RemoteEvent: " .. obj:GetFullName())
+        end
+    end
+    return all
+end
+
+local allRemotes = scanAllRemotes()
+
+-- Cari Buy dari hasil scan
+for name, remote in pairs(allRemotes) do
+    local lower = name:lower()
+    if lower:find("buy") or lower:find("beli") or lower:find("purchase") or lower:find("shop") then
+        if not RE_Buy then
+            RE_Buy = remote
+            print("[AUTOFARM] RE_Buy ditemukan: " .. remote:GetFullName())
+        end
+    end
+    if lower:find("sell") or lower:find("jual") then
+        if not RE_Sell then
+            RE_Sell = remote
+            print("[AUTOFARM] RE_Sell ditemukan: " .. remote:GetFullName())
+        end
+    end
+end
+
+-- Fallback manual
+if not RE_Buy  then RE_Buy  = findRE("BuyItem","BuySeed","BeliItem","BeliBibit","Buy","PurchaseItem","ShopBuy","NPCBuy") end
+if not RE_Sell then RE_Sell = findRE("SellItem","SellAll","JualItem","Sell","SellCrops","SellHarvest","NPCSell") end
 
 print("[AUTOFARM v3] Remote Events:")
-print("  Plant   = " .. (RE_Plant   and RE_Plant.Name   or "❌ not found"))
-print("  Harvest = " .. (RE_Harvest and RE_Harvest.Name or "❌ not found"))
-print("  Buy     = " .. (RE_Buy     and RE_Buy.Name     or "❌ not found"))
-print("  Sell    = " .. (RE_Sell    and RE_Sell.Name    or "❌ not found"))
+print("  Plant   = " .. (RE_Plant   and RE_Plant:GetFullName()   or "❌ not found"))
+print("  Harvest = " .. (RE_Harvest and RE_Harvest:GetFullName() or "❌ not found"))
+print("  Buy     = " .. (RE_Buy     and RE_Buy:GetFullName()     or "❌ not found"))
+print("  Sell    = " .. (RE_Sell    and RE_Sell:GetFullName()    or "❌ not found"))
 
 -- ============================
 -- HELPER: FIND NPC
@@ -310,41 +363,54 @@ end
 -- CORE: BELI BIBIT
 -- Jalan ke NPC_Bibit → fire RE_Buy(seedKey, amount)
 -- ============================
+local function tryFindBuyRemote()
+    if RE_Buy then return RE_Buy end
+    for _, obj in ipairs(RS:GetDescendants()) do
+        if obj:IsA("RemoteEvent") then
+            local lower = obj.Name:lower()
+            if lower:find("buy") or lower:find("beli") or lower:find("shop") or lower:find("purchase") then
+                RE_Buy = obj
+                print("[AUTOFARM] RE_Buy ditemukan: " .. obj:GetFullName())
+                return RE_Buy
+            end
+        end
+    end
+    return nil
+end
+
 local function buySeeds(crop)
     if not cfg.autoBuy then return end
+
+    -- Coba cari RE_Buy jika belum ada — JANGAN blokir tanam
+    local buyRemote = tryFindBuyRemote()
+    if not buyRemote then
+        -- Skip beli, lanjut proses tanam dengan bibit yang ada
+        print("[AUTOFARM] RE_Buy tidak ada — skip beli " .. crop.key)
+        return
+    end
+
     stat.action = "🛒 Beli " .. crop.icon .. " " .. crop.key
     upUI()
 
     -- Teleport ke NPC_Bibit
     local pos = getNPCPos(NPC.bibit)
-    if pos then
-        tpTo(pos)
-        task.wait(0.4)
-    end
+    if pos then tpTo(pos); task.wait(0.4) end
 
-    -- Fire remote beli — coba semua format parameter
-    if RE_Buy then
-        -- Format 1: (seedKey, amount)
-        pcall(function() RE_Buy:FireServer(crop.key, cfg.buyAmt) end)
-        task.wait(cfg.actDelay)
-        -- Format 2: ({item=seedKey, amount=N})
-        pcall(function() RE_Buy:FireServer({item=crop.key, amount=cfg.buyAmt}) end)
-        task.wait(cfg.actDelay)
-        -- Format 3: (seedKey) saja
-        pcall(function() RE_Buy:FireServer(crop.key) end)
-        task.wait(cfg.actDelay)
-    end
+    -- Coba semua format parameter
+    pcall(function() buyRemote:FireServer(crop.key, cfg.buyAmt) end)
+    task.wait(cfg.actDelay)
+    pcall(function() buyRemote:FireServer({item=crop.key, amount=cfg.buyAmt}) end)
+    task.wait(cfg.actDelay)
+    pcall(function() buyRemote:FireServer(crop.key) end)
+    task.wait(cfg.actDelay)
 
-    -- Fallback: klik ProximityPrompt NPC_Bibit
+    -- Fallback ProximityPrompt
     local npcObj = getNPCObj(NPC.bibit)
     if npcObj then
         firePrompt(npcObj, "Beli")
         task.wait(0.3)
-        if RE_Buy then
-            pcall(function() RE_Buy:FireServer(crop.key, cfg.buyAmt) end)
-        end
+        pcall(function() buyRemote:FireServer(crop.key, cfg.buyAmt) end)
     end
-
     task.wait(cfg.actDelay)
 end
 
@@ -452,7 +518,11 @@ local function plantBiasa(crop)
             task.wait(0.5)
             seedCount = getSeedCount(crop.key)
         end
-        if seedCount <= 0 then return end
+        -- Kalau masih 0 setelah coba beli, skip tanaman ini saja — JANGAN blokir yang lain
+        if seedCount <= 0 then
+            print("[AUTOFARM] Bibit " .. crop.key .. " habis & tidak bisa dibeli — skip")
+            return
+        end
     end
 
     stat.action = "🌱 Tanam " .. crop.icon .. " " .. crop.key
@@ -879,6 +949,21 @@ T3:CreateButton({ Name="🔍  Cek Remote Events", Callback=function()
         })
         task.wait(0.4)
     end
+end })
+T3:CreateButton({ Name="📋  Scan SEMUA RemoteEvent", Callback=function()
+    -- Print ke console semua RemoteEvent di RS
+    local count = 0
+    for _, obj in ipairs(RS:GetDescendants()) do
+        if obj:IsA("RemoteEvent") then
+            count = count + 1
+            print("[SCAN] " .. obj:GetFullName())
+        end
+    end
+    Rayfield:Notify({
+        Title   = "📋 Scan Selesai",
+        Content = "Ditemukan " .. count .. " RemoteEvent\nLihat di Console (F9)!",
+        Duration = 5, Image = 4483362458
+    })
 end })
 T3:CreateButton({ Name="📍  Cek NPC Positions", Callback=function()
     for k, name in pairs(NPC) do
