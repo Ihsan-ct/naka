@@ -768,28 +768,91 @@ local function waitMs(ms)
     task.wait(ms / 1000)
 end
 
-local function charDelay(charIndex, wordLength)
+-- =========================================================
+-- SMART DELAY SYSTEM v2.0 - Timing Lebih Natural
+-- =========================================================
+
+local function charDelay(charIndex, wordLength, word)
     local base = humanProfile.baseSpeed
-    base = base + (humanProfile.wordCount * humanProfile.fatigueRate)
-    if humanProfile.isBurstyTyper then
-        local progress = charIndex / wordLength
-        if progress < 0.35 then
-            base = base * 0.85
-        elseif progress > 0.75 then
-            base = base * 1.4
+    
+    -- ========== FAKTOR PANJANG KATA ==========
+    -- Kata panjang butuh waktu mikir lebih lama
+    if wordLength >= 12 then
+        base = base * 1.5  -- +50% untuk kata super panjang
+    elseif wordLength >= 10 then
+        base = base * 1.3  -- +30% untuk kata panjang
+    elseif wordLength >= 8 then
+        base = base * 1.15 -- +15% untuk kata agak panjang
+    elseif wordLength <= 3 then
+        base = base * 0.8  -- -20% untuk kata pendek (cepat)
+    end
+    
+    -- ========== FAKTOR POSISI HURUF ==========
+    -- Huruf pertama: butuh waktu mikir (memulai kata)
+    if charIndex == 1 then
+        base = base + math.random(800, 1800)
+        -- Kadang orang mikir sebentar sebelum mulai ngetik
+        if math.random(1, 3) == 1 then
+            base = base + math.random(500, 1200)  -- Mikir agak lama
         end
     end
-    if charIndex == 1 then
-        base = base + math.random(1000, 3000)
+    
+    -- Huruf tengah: lebih cepat (sudah flow)
+    if charIndex > 1 and charIndex < wordLength then
+        base = base * 0.85  -- -15% lebih cepat di tengah
+        -- Kadang di tengah kata bisa ngebut
+        if math.random(1, 4) == 1 then
+            base = base * 0.7  -- Ngebut mendadak
+        end
     end
-    local noise = math.random(-15, 15) / 100
-    base = base * (1 + noise)
-    if math.random(1, 10) == 1 then
-        base = base + math.random(200, 600)
+    
+    -- Huruf terakhir: sering diperlambat (mikir kata berikutnya)
+    if charIndex == wordLength then
+        base = base + math.random(300, 800)
+        -- Kadang orang nahan sebentar di akhir kata
+        if math.random(1, 3) == 1 then
+            base = base + math.random(200, 500)
+        end
     end
-    if base < 150 then base = 150 end
-    return math.floor(base)
-end
+    
+    -- ========== FAKTOR KESULITAN KATA ==========
+    -- Hitung jumlah huruf sulit (konsonan rangkap, huruf jarang)
+    local hardChars = 0
+    local doubleConsonant = 0
+    local prevChar = ""
+    
+    for i = 1, #word do
+        local c = string.sub(word, i, i)
+        
+        -- Huruf jarang (susah diketik)
+        if c == "x" or c == "q" or c == "z" or c == "f" or c == "v" then
+            hardChars = hardChars + 2
+        elseif c == "y" or c == "w" then
+            hardChars = hardChars + 1
+        end
+        
+        -- Deteksi konsonan beruntun (ng, ny, kh, etc)
+        if i > 1 then
+            local both = prevChar .. c
+            if both == "ng" or both == "ny" or both == "kh" or both == "sy" or both == "tr" or both == "kr" then
+                doubleConsonant = doubleConsonant + 1
+            end
+        end
+        prevChar = c
+    end
+    
+    -- Terapkan penalty berdasarkan kesulitan
+    if hardChars > 5 then
+        base = base * 1.4  -- Kata super sulit
+    elseif hardChars > 3 then
+        base = base * 1.2  -- Kata sulit
+    elseif hardChars > 1 then
+        base = base * 1.05 -- Agak sulit
+    end
+    
+    -- Bonus untuk kata umum (lebih lancar)
+    if isCommonWord(word) then
+        base = base * 0.9  -
 
 local function humanTypeWord(selectedWord, serverPrefix)
     humanProfile.wordCount = humanProfile.wordCount + 1
