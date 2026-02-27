@@ -720,11 +720,11 @@ end
 
 local humanProfile = {
     baseSpeed      = math.random(350, 550),
-    mistakeChance  = math.random(5, 8) / 100,
+    mistakeChance  = math.random(6, 13) / 100,
     hesitateChance = math.random(8, 18) / 100,
     isBurstyTyper  = math.random(1, 2) == 1,
     fatigueRate    = math.random(1, 4),
-    doubleTypoRate = math.random(2, 4) / 100,
+    doubleTypoRate = math.random(2, 6) / 100,
     wordCount      = 0,
 }
 
@@ -768,91 +768,28 @@ local function waitMs(ms)
     task.wait(ms / 1000)
 end
 
--- =========================================================
--- SMART DELAY SYSTEM v2.0 - Timing Lebih Natural
--- =========================================================
-
-local function charDelay(charIndex, wordLength, word)
+local function charDelay(charIndex, wordLength)
     local base = humanProfile.baseSpeed
-    
-    -- ========== FAKTOR PANJANG KATA ==========
-    -- Kata panjang butuh waktu mikir lebih lama
-    if wordLength >= 12 then
-        base = base * 1.5  -- +50% untuk kata super panjang
-    elseif wordLength >= 10 then
-        base = base * 1.3  -- +30% untuk kata panjang
-    elseif wordLength >= 8 then
-        base = base * 1.15 -- +15% untuk kata agak panjang
-    elseif wordLength <= 3 then
-        base = base * 0.8  -- -20% untuk kata pendek (cepat)
+    base = base + (humanProfile.wordCount * humanProfile.fatigueRate)
+    if humanProfile.isBurstyTyper then
+        local progress = charIndex / wordLength
+        if progress < 0.35 then
+            base = base * 0.85
+        elseif progress > 0.75 then
+            base = base * 1.4
+        end
     end
-    
-    -- ========== FAKTOR POSISI HURUF ==========
-    -- Huruf pertama: butuh waktu mikir (memulai kata)
     if charIndex == 1 then
-        base = base + math.random(800, 1800)
-        -- Kadang orang mikir sebentar sebelum mulai ngetik
-        if math.random(1, 3) == 1 then
-            base = base + math.random(500, 1200)  -- Mikir agak lama
-        end
+        base = base + math.random(1000, 3000)
     end
-    
-    -- Huruf tengah: lebih cepat (sudah flow)
-    if charIndex > 1 and charIndex < wordLength then
-        base = base * 0.85  -- -15% lebih cepat di tengah
-        -- Kadang di tengah kata bisa ngebut
-        if math.random(1, 4) == 1 then
-            base = base * 0.7  -- Ngebut mendadak
-        end
+    local noise = math.random(-15, 15) / 100
+    base = base * (1 + noise)
+    if math.random(1, 10) == 1 then
+        base = base + math.random(200, 600)
     end
-    
-    -- Huruf terakhir: sering diperlambat (mikir kata berikutnya)
-    if charIndex == wordLength then
-        base = base + math.random(300, 800)
-        -- Kadang orang nahan sebentar di akhir kata
-        if math.random(1, 3) == 1 then
-            base = base + math.random(200, 500)
-        end
-    end
-    
-    -- ========== FAKTOR KESULITAN KATA ==========
-    -- Hitung jumlah huruf sulit (konsonan rangkap, huruf jarang)
-    local hardChars = 0
-    local doubleConsonant = 0
-    local prevChar = ""
-    
-    for i = 1, #word do
-        local c = string.sub(word, i, i)
-        
-        -- Huruf jarang (susah diketik)
-        if c == "x" or c == "q" or c == "z" or c == "f" or c == "v" then
-            hardChars = hardChars + 2
-        elseif c == "y" or c == "w" then
-            hardChars = hardChars + 1
-        end
-        
-        -- Deteksi konsonan beruntun (ng, ny, kh, etc)
-        if i > 1 then
-            local both = prevChar .. c
-            if both == "ng" or both == "ny" or both == "kh" or both == "sy" or both == "tr" or both == "kr" then
-                doubleConsonant = doubleConsonant + 1
-            end
-        end
-        prevChar = c
-    end
-    
-    -- Terapkan penalty berdasarkan kesulitan
-    if hardChars > 5 then
-        base = base * 1.4  -- Kata super sulit
-    elseif hardChars > 3 then
-        base = base * 1.2  -- Kata sulit
-    elseif hardChars > 1 then
-        base = base * 1.05 -- Agak sulit
-    end
-    
-    -- Bonus untuk kata umum (lebih lancar)
-    if isCommonWord(word) then
-        base = base * 0.9  -
+    if base < 150 then base = 150 end
+    return math.floor(base)
+end
 
 local function humanTypeWord(selectedWord, serverPrefix)
     humanProfile.wordCount = humanProfile.wordCount + 1
@@ -1706,12 +1643,12 @@ SettingsTab:CreateLabel(string.format("◦  Tipe Ketik       :  %s", humanProfil
 SettingsTab:CreateButton({
     Name = "🔄  Generate Profil Baru",
     Callback = function()
-        humanProfile.baseSpeed      = math.random(350, 550)
-        humanProfile.mistakeChance  = math.random(6, 13) / 100
+        humanProfile.baseSpeed      = math.random(350, 450)
+        humanProfile.mistakeChance  = math.random(6, 8) / 100
         humanProfile.hesitateChance = math.random(8, 18) / 100
         humanProfile.isBurstyTyper  = math.random(1,2) == 1
         humanProfile.fatigueRate    = math.random(1,4)
-        humanProfile.doubleTypoRate = math.random(2,6) / 100
+        humanProfile.doubleTypoRate = math.random(2,4) / 100
         humanProfile.wordCount      = 0
         Rayfield:Notify({
             Title   = "🎭  Profil Baru Dibuat!",
