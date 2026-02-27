@@ -719,12 +719,12 @@ end
 -- =========================================================
 
 local humanProfile = {
-    baseSpeed      = math.random(350, 550),
-    mistakeChance  = math.random(6, 13) / 100,
-    hesitateChance = math.random(8, 18) / 100,
-    isBurstyTyper  = math.random(1, 2) == 1,
-    fatigueRate    = math.random(1, 4),
-    doubleTypoRate = math.random(2, 6) / 100,
+    baseSpeed      = math.random(250, 350),      -- Lebih cepat
+    mistakeChance  = 0,                          -- TYPO MATI (0%)
+    hesitateChance = 0.02,                       -- Ragu-ragu dikit (2%)
+    isBurstyTyper  = false,
+    fatigueRate    = 0,
+    doubleTypoRate = 0,                          -- DOUBLE TYPO MATI
     wordCount      = 0,
 }
 
