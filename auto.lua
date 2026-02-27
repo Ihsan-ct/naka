@@ -720,11 +720,11 @@ end
 
 local humanProfile = {
     baseSpeed      = math.random(350, 550),
-    mistakeChance  = math.random(6, 13) / 100,
+    mistakeChance  = math.random(5, 8) / 100,
     hesitateChance = math.random(8, 18) / 100,
     isBurstyTyper  = math.random(1, 2) == 1,
     fatigueRate    = math.random(1, 4),
-    doubleTypoRate = math.random(2, 6) / 100,
+    doubleTypoRate = math.random(2, 4) / 100,
     wordCount      = 0,
 }
 
