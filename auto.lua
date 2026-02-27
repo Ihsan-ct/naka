@@ -1643,12 +1643,12 @@ SettingsTab:CreateLabel(string.format("◦  Tipe Ketik       :  %s", humanProfil
 SettingsTab:CreateButton({
     Name = "🔄  Generate Profil Baru",
     Callback = function()
-        humanProfile.baseSpeed      = math.random(350, 450)
-        humanProfile.mistakeChance  = math.random(6, 8) / 100
+        humanProfile.baseSpeed      = math.random(350, 550)
+        humanProfile.mistakeChance  = math.random(6, 13) / 100
         humanProfile.hesitateChance = math.random(8, 18) / 100
         humanProfile.isBurstyTyper  = math.random(1,2) == 1
         humanProfile.fatigueRate    = math.random(1,4)
-        humanProfile.doubleTypoRate = math.random(2,4) / 100
+        humanProfile.doubleTypoRate = math.random(2,6) / 100
         humanProfile.wordCount      = 0
         Rayfield:Notify({
             Title   = "🎭  Profil Baru Dibuat!",
