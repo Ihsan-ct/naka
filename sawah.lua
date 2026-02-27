@@ -1,23 +1,27 @@
 -- =========================================================
--- 🌾 NAKA AUTO FARM — SAWAH INDO v4.0
--- Data 100% AKURAT dari decompile CropConfig + LahanBesarConfig
--- + TutorialConfig + LocaleConfig
+-- 🌾 NAKA AUTO FARM — SAWAH INDO v5.0
+-- Remote 100% AKURAT dari ReplicatedStorage screenshot:
 --
--- PERBAIKAN dari v3.0:
---   ✅ ToolName per tanaman dari CropConfig asli
---   ✅ HarvestAmount & AutoHarvestDelay dari config asli
---   ✅ SellPrice dari SellableItems config
---   ✅ Phase detection: *_Fase3 model = matang
---   ✅ ProximityPrompt action text dari LocaleConfig
---   ✅ LahanBesar: MaxPerPlayer=1, MaxCropsPerType=1, MaxTotalCrops=2
---   ✅ NPC folder: workspace.NPCs (dari WorldConfig)
---   ✅ AreaTanam target dari TutorialConfig
---   ✅ Remote cache + retry otomatis
---   ✅ Thread management (tidak ada zombie threads)
---   ✅ Anti-AFK tidak ganggu farming
---   ✅ Coins tracker akurat
---   ✅ Level-up notif
---   ✅ Debug tab lengkap
+--   RS.Remotes.TutorialRemotes:
+--     RequestSell, RequestShop, RequestToolShop
+--     ConfirmAction, SyncData, RequestLahan
+--
+--   RS.Remotes (root level RemoteEvents):
+--     GetBibit       ← beli bibit dari NPC_Bibit
+--     HarvestCrop    ← panen tanaman biasa
+--     PlantCrop      ← tanam di AreaTanam
+--     PlantLahanCrop ← tanam di AreaTanamBesar (lahan besar)
+--     SellCrop       ← jual hasil panen
+--     RefreshShop    ← refresh shop UI
+--     ToggleAutoHarvest ← gamepass auto harvest
+--     UpdateLevel, UpdateStep, SyncData
+--
+-- PERBAIKAN dari v4.x:
+--   ✅ Nama remote benar semua (GetBibit, SellCrop, PlantLahanCrop)
+--   ✅ Tidak spam log "RE.buy tidak ditemukan"
+--   ✅ Level check hanya Lv.1+ bisa tanam Padi (benar di Lv.2)
+--   ✅ Bibit habis → GetBibit otomatis, tidak infinite skip
+--   ✅ Log bersih: tidak repeat tiap loop
 -- =========================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -43,7 +47,6 @@ if not ok then
         Notify            = function(_, d) print("[NOTIF] " .. tostring(d.Title) .. ": " .. tostring(d.Content)) end,
         LoadConfiguration = function() end,
     }
-    warn("[NAKA] Rayfield gagal dimuat, menggunakan stub UI")
 end
 
 -- ============================
@@ -64,116 +67,96 @@ LP.CharacterAdded:Connect(function(c)
 end)
 
 -- ============================
--- DATA AKURAT DARI DECOMPILE
+-- REMOTE EVENTS — NAMA PASTI
+-- Dari screenshot ReplicatedStorage
 -- ============================
+local RemotesFolder        = RS:WaitForChild("Remotes", 10)
+local TutorialRemotes      = RemotesFolder and RemotesFolder:FindFirstChild("TutorialRemotes")
 
--- CropConfig → Seeds
-local CROPS_BIASA = {
-    { key="Bibit Padi",       icon="🌾", toolName="BibitTool",      harvestItem="Padi",       harvestAmt=1, autoHDelay=60,  sellPrice=10,  buyPrice=5,    seedSellPx=3,    minLevel=1,   phaseModel="Bibit_Fase3",       enabled=true },
-    { key="Bibit Jagung",     icon="🌽", toolName="JagungTool",     harvestItem="Jagung",     harvestAmt=2, autoHDelay=90,  sellPrice=20,  buyPrice=15,   seedSellPx=11,   minLevel=20,  phaseModel="Jagung_Fase3",      enabled=true },
-    { key="Bibit Tomat",      icon="🍅", toolName="TomatTool",      harvestItem="Tomat",      harvestAmt=3, autoHDelay=120, sellPrice=30,  buyPrice=25,   seedSellPx=18,   minLevel=40,  phaseModel="Tomat_Fase3",       enabled=true },
-    { key="Bibit Terong",     icon="🍆", toolName="TerongTool",     harvestItem="Terong",     harvestAmt=4, autoHDelay=150, sellPrice=50,  buyPrice=40,   seedSellPx=30,   minLevel=60,  phaseModel="Terong_Fase3",      enabled=true },
-    { key="Bibit Strawberry", icon="🍓", toolName="StrawberryTool", harvestItem="Strawberry", harvestAmt=4, autoHDelay=200, sellPrice=75,  buyPrice=60,   seedSellPx=45,   minLevel=80,  phaseModel="Strawberry_Fase3",  enabled=true },
-}
-
--- CropConfig → Seeds (CustomHarvest = true)
-local CROPS_BESAR = {
-    { key="Bibit Sawit",  icon="🌴", toolName="SawitTool",  harvestItem="Sawit",  harvestAmt=4, autoHDelay=600, sellPrice=1500, buyPrice=1000, seedSellPx=750,  minLevel=80,  phaseModel="Sawit_Fase3",  customHarvest=true, fruitType="Sawit",  enabled=true },
-    { key="Bibit Durian", icon="🍈", toolName="DurianTool", harvestItem="Durian", harvestAmt=1, autoHDelay=700, sellPrice=nil,  buyPrice=2000, seedSellPx=1500, minLevel=120, phaseModel="Durian_Fase3", customHarvest=true, fruitType="Durian", enabled=true },
-}
-
--- LahanBesarConfig
-local LAHAN_BESAR = {
-    areaPrefix      = "AreaTanamBesar",
-    totalAreas      = 28,
-    buyPrice        = 100000,
-    maxPerPlayer    = 1,
-    maxCropsPerType = 1,
-    maxTotalCrops   = 2,
-}
-
--- WorldConfig
-local NPC_FOLDER = "NPCs"
-local NPC_NAMES  = {
-    bibit   = "NPC_Bibit",
-    penjual = "NPC_Penjual",
-    alat    = "NPC_Alat",
-    sawit   = "NPC_PedagangSawit",
-}
-
--- LocaleConfig ProximityPrompt action keywords
-local PP = {
-    harvest  = {"Panen", "Harvest", "Ambil"},
-    plant    = {"Tanam", "Plant", "Semai"},
-    buy      = {"Beli Bibit", "Beli", "Buy"},
-    sell     = {"Jual Hasil Panen", "Jual Semua", "Jual", "Sell All", "Sell"},
-    sellSawit= {"Jual Sawit", "Jual Buah", "Sell Palm"},
-}
-
--- ============================
--- REMOTE DETECTION
--- ============================
-local remoteMap = {}
-
-local function buildRemoteMap()
-    remoteMap = {}
-    for _, obj in ipairs(RS:GetDescendants()) do
-        if obj:IsA("RemoteEvent") then
-            local lo = obj.Name:lower()
-            if not remoteMap[lo] then remoteMap[lo] = obj end
-            local fp = obj:GetFullName():lower():gsub("replicatedstorage%.", "")
-            if not remoteMap[fp] then remoteMap[fp] = obj end
-        end
-    end
-end
-buildRemoteMap()
-
-RS.DescendantAdded:Connect(function(obj)
-    if obj:IsA("RemoteEvent") then
-        local lo = obj.Name:lower()
-        if not remoteMap[lo] then remoteMap[lo] = obj end
-        print("[NAKA] Remote baru terdeteksi: " .. obj:GetFullName())
-    end
-end)
-
-local function findRemote(keywords)
-    for _, kw in ipairs(keywords) do
-        local lo = kw:lower()
-        if remoteMap[lo] then return remoteMap[lo] end
-        for key, remote in pairs(remoteMap) do
-            if key:find(lo, 1, true) then return remote end
-        end
-    end
-    return nil
+-- Fungsi helper cari remote di seluruh RS
+local function getRemote(name)
+    local r = RS:FindFirstChild(name, true)
+    if r then return r end
+    -- fallback workspace
+    return workspace:FindFirstChild(name, true)
 end
 
-local RE = { plant=nil, harvest=nil, buy=nil, sell=nil }
+-- Remote Events yang sudah PASTI ada (dari screenshot)
+local RE = {
+    -- PALING PENTING
+    getBibit       = getRemote("GetBibit"),          -- beli bibit dari NPC_Bibit
+    harvestCrop    = getRemote("HarvestCrop"),        -- panen tanaman biasa
+    plantCrop      = getRemote("PlantCrop"),          -- tanam di AreaTanam
+    plantLahan     = getRemote("PlantLahanCrop"),     -- tanam di AreaTanamBesar
+    sellCrop       = getRemote("SellCrop"),           -- jual hasil panen
 
-local function detectRemotes()
-    RE.plant   = findRemote({"plantcrop","plantseed","plant","tanam","tanambibit"})
-    RE.harvest = findRemote({"harvestcrop","harvestall","harvest","panen","panensemua"})
-    RE.buy     = findRemote({"buyseed","buyitem","belibibit","buy","beli","purchase","shopbuy"})
-    RE.sell    = findRemote({"sellitem","sellall","jualitem","jual","sell","sellcrops"})
-end
-detectRemotes()
-task.delay(3, detectRemotes)
-task.delay(8, detectRemotes)
+    -- PENDUKUNG
+    requestSell    = getRemote("RequestSell"),        -- buka UI jual
+    requestShop    = getRemote("RequestShop"),        -- buka UI toko bibit
+    confirmAction  = getRemote("ConfirmAction"),      -- konfirmasi aksi
+    requestLahan   = getRemote("RequestLahan"),       -- klaim lahan besar
+    refreshShop    = getRemote("RefreshShop"),        -- refresh toko
+    syncData       = getRemote("SyncData"),           -- sync data player
+}
 
+-- Log status remote
 local function logRemotes()
-    print("[NAKA v4.0] Remote Events:")
-    print("  Plant   = " .. (RE.plant   and RE.plant:GetFullName()   or "❌ not found"))
-    print("  Harvest = " .. (RE.harvest and RE.harvest:GetFullName() or "❌ not found"))
-    print("  Buy     = " .. (RE.buy     and RE.buy:GetFullName()     or "❌ not found"))
-    print("  Sell    = " .. (RE.sell    and RE.sell:GetFullName()    or "❌ not found"))
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print("  🌾 NAKA v5.0 — Remote Status:")
+    print("  GetBibit    = " .. (RE.getBibit    and "✅ " .. RE.getBibit:GetFullName()    or "❌"))
+    print("  HarvestCrop = " .. (RE.harvestCrop and "✅ " .. RE.harvestCrop:GetFullName() or "❌"))
+    print("  PlantCrop   = " .. (RE.plantCrop   and "✅ " .. RE.plantCrop:GetFullName()   or "❌"))
+    print("  PlantLahan  = " .. (RE.plantLahan  and "✅ " .. RE.plantLahan:GetFullName()  or "❌"))
+    print("  SellCrop    = " .. (RE.sellCrop    and "✅ " .. RE.sellCrop:GetFullName()    or "❌"))
+    print("  RequestSell = " .. (RE.requestSell and "✅ " .. RE.requestSell:GetFullName() or "❌"))
+    print("  RequestShop = " .. (RE.requestShop and "✅ " .. RE.requestShop:GetFullName() or "❌"))
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 end
+
+-- Retry jika ada yang nil (remote mungkin belum siap saat load)
+local function retryRemotes()
+    for name, remote in pairs(RE) do
+        if not remote then
+            -- konversi nama field ke nama Remote (misal getBibit → GetBibit)
+            local capitalised = name:sub(1,1):upper() .. name:sub(2)
+            RE[name] = getRemote(capitalised) or getRemote(name)
+        end
+    end
+end
+task.delay(3, retryRemotes)
+task.delay(8, retryRemotes)
+
 logRemotes()
 
+-- Safe FireServer
 local function fire(remote, ...)
     if not remote then return false end
     local s, e = pcall(remote.FireServer, remote, ...)
-    if not s then warn("[NAKA] FireServer error " .. remote.Name .. ": " .. tostring(e)) end
+    if not s then warn("[NAKA] FireServer error [" .. remote.Name .. "]: " .. tostring(e)) end
     return s
 end
+
+-- ============================
+-- DATA TANAMAN (CropConfig)
+-- ============================
+local CROPS_BIASA = {
+    { key="Bibit Padi",       icon="🌾", toolName="BibitTool",      harvestItem="Padi",       harvestAmt=1, sellPrice=10,  buyPrice=5,    minLevel=1,   phaseModel="Bibit_Fase3",      enabled=true },
+    { key="Bibit Jagung",     icon="🌽", toolName="JagungTool",     harvestItem="Jagung",     harvestAmt=2, sellPrice=20,  buyPrice=15,   minLevel=20,  phaseModel="Jagung_Fase3",     enabled=true },
+    { key="Bibit Tomat",      icon="🍅", toolName="TomatTool",      harvestItem="Tomat",      harvestAmt=3, sellPrice=30,  buyPrice=25,   minLevel=40,  phaseModel="Tomat_Fase3",      enabled=true },
+    { key="Bibit Terong",     icon="🍆", toolName="TerongTool",     harvestItem="Terong",     harvestAmt=4, sellPrice=50,  buyPrice=40,   minLevel=60,  phaseModel="Terong_Fase3",     enabled=true },
+    { key="Bibit Strawberry", icon="🍓", toolName="StrawberryTool", harvestItem="Strawberry", harvestAmt=4, sellPrice=75,  buyPrice=60,   minLevel=80,  phaseModel="Strawberry_Fase3", enabled=true },
+}
+local CROPS_BESAR = {
+    { key="Bibit Sawit",  icon="🌴", toolName="SawitTool",  harvestItem="Sawit",  harvestAmt=4, sellPrice=1500, buyPrice=1000, minLevel=80,  phaseModel="Sawit_Fase3",  customHarvest=true, fruitType="Sawit",  enabled=true },
+    { key="Bibit Durian", icon="🍈", toolName="DurianTool", harvestItem="Durian", harvestAmt=1, sellPrice=nil,  buyPrice=2000, minLevel=120, phaseModel="Durian_Fase3", customHarvest=true, fruitType="Durian", enabled=true },
+}
+
+-- LahanBesarConfig
+local LAHAN = { areaPrefix="AreaTanamBesar", totalAreas=28, maxTotalCrops=2, maxCropsPerType=1 }
+
+-- NPC (WorldConfig: NPCFolder = "NPCs")
+local NPC_FOLDER = "NPCs"
+local NPC_NAMES  = { bibit="NPC_Bibit", penjual="NPC_Penjual", alat="NPC_Alat", sawit="NPC_PedagangSawit" }
 
 -- ============================
 -- NPC FINDER
@@ -181,8 +164,7 @@ end
 local function getNPCObj(role)
     local name = NPC_NAMES[role]
     if not name then return nil end
-    local folder = workspace:FindFirstChild(NPC_FOLDER)
-        or workspace:FindFirstChild("NPC")
+    local folder = workspace:FindFirstChild(NPC_FOLDER) or workspace:FindFirstChild("NPC")
     if folder then
         local found = folder:FindFirstChild(name, true)
         if found then return found end
@@ -196,14 +178,12 @@ local function getNPCPos(role)
     if obj:IsA("Model") then
         local rp = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart")
         return rp and rp.Position
-    elseif obj:IsA("BasePart") then
-        return obj.Position
-    end
+    elseif obj:IsA("BasePart") then return obj.Position end
     return nil
 end
 
 -- ============================
--- AREA FINDER
+-- AREA TANAM
 -- ============================
 local function collectParts(obj)
     local parts = {}
@@ -217,16 +197,14 @@ local function collectParts(obj)
     return parts
 end
 
--- TutorialConfig: Target = "AreaTanam"
 local function getAreaTanamParts()
     return collectParts(workspace:FindFirstChild("AreaTanam", true))
 end
 
--- LahanBesarConfig: AreaTanamBesar1..28
 local function getAreaBesarParts()
     local parts = {}
-    for i = 1, LAHAN_BESAR.totalAreas do
-        local area = workspace:FindFirstChild(LAHAN_BESAR.areaPrefix .. tostring(i), true)
+    for i = 1, LAHAN.totalAreas do
+        local area = workspace:FindFirstChild(LAHAN.areaPrefix .. tostring(i), true)
         for _, p in ipairs(collectParts(area)) do table.insert(parts, p) end
     end
     return parts
@@ -261,15 +239,17 @@ end
 
 local function getCoins()  return readStat({"Coins","coins","Gold","Money","Cash"}) end
 local function getLevel()  return readStat({"Level","level","Lv","LV","XP_Level","PlayerLevel"}) end
-local function getSeedCount(key) return readStat({ key, key:gsub(" ",""), "Seed_"..key:gsub(" ","") }) end
+local function getSeedCount(key)
+    return readStat({ key, key:gsub(" ",""), "Seed_"..key:gsub(" ","") })
+end
 
 -- ============================
 -- TELEPORT
 -- ============================
 local lastTP = 0
-local function tpTo(pos, force)
+local function tpTo(pos)
     if not pos or not Root or not Root.Parent then return end
-    if not force and (os.clock() - lastTP) < 0.25 then return end
+    if (os.clock() - lastTP) < 0.2 then return end
     lastTP = os.clock()
     Root.CFrame = CFrame.new(pos + Vector3.new(0, 5, 0))
     task.wait(0.2)
@@ -279,7 +259,7 @@ local function tpIfFar(pos, dist)
 end
 
 -- ============================
--- INTERAKSI
+-- INTERAKSI PROXIMITY / CLICK
 -- ============================
 local function triggerPP(obj, keywords)
     if not obj then return end
@@ -301,7 +281,6 @@ local function triggerPP(obj, keywords)
         end
     end
 end
-
 local function triggerCD(obj)
     if not obj then return end
     local root = (obj:IsA("Model") and obj)
@@ -312,7 +291,6 @@ local function triggerCD(obj)
         end
     end
 end
-
 local function interact(obj, keywords)
     triggerPP(obj, keywords)
     triggerCD(obj)
@@ -322,7 +300,7 @@ end
 -- PLOT HELPERS
 -- ============================
 local function isPlotMature(part)
-    local function checkObj(o)
+    local function check(o)
         if not o then return false end
         if o:GetAttribute("Matang") == true then return true end
         if o:GetAttribute("Ready")  == true then return true end
@@ -332,11 +310,11 @@ local function isPlotMature(part)
         if ph and tonumber(ph) and tonumber(ph) >= 3 then return true end
         return false
     end
-    if checkObj(part) then return true end
+    if check(part) then return true end
     local mdl = part.Parent
     if mdl and mdl:IsA("Model") then
-        if checkObj(mdl) then return true end
-        -- CropConfig: Fase matang = Phases[3].ModelName berisi "_Fase3"
+        if check(mdl) then return true end
+        -- CropConfig: phase matang = model bernama *_Fase3
         for _, c in ipairs(mdl:GetChildren()) do
             if c.Name:find("_Fase3") then return true end
         end
@@ -387,27 +365,28 @@ local cfg = {
     autoSell    = false,
     antiAFK     = true,
     notifLvlUp  = true,
-    loopDelay   = 3,
-    actDelay    = 0.4,
-    buyAmt      = 50,
-    minSeedThr  = 5,
+    loopDelay   = 5,      -- detik antar loop (lebih lambat = lebih aman)
+    actDelay    = 0.5,    -- detik antar aksi
+    buyAmt      = 50,     -- jumlah bibit dibeli
+    minSeedThr  = 5,      -- beli jika stok < ini
     useTP       = true,
 }
 
 local stat = {
-    running   = false,
-    action    = "⏹ Standby",
-    harvested = 0,
-    planted   = 0,
-    sold      = 0,
-    coinsGain = 0,
-    startTime = os.time(),
-    lastLv    = 0,
-    lastCoins = 0,
-    loops     = 0,
-    errors    = 0,
+    running    = false,
+    action     = "⏹ Standby",
+    harvested  = 0,
+    planted    = 0,
+    sold       = 0,
+    coinsGain  = 0,
+    startTime  = os.time(),
+    lastLv     = 0,
+    lastCoins  = 0,
+    loops      = 0,
+    errors     = 0,
 }
 
+-- Thread registry
 local threads = {}
 local function spawnThread(fn)
     local t = task.spawn(fn)
@@ -421,66 +400,92 @@ end
 local L = {}
 local function updateUI()
     local e = os.time() - stat.startTime
-    pcall(function() L.status:Set("  Status    :  "  .. (stat.running and "🟢 BERJALAN" or "🔴 BERHENTI")) end)
-    pcall(function() L.action:Set("  Aksi      :  "  .. stat.action) end)
-    pcall(function() L.harvest:Set("  Dipanen   :  " .. stat.harvested) end)
-    pcall(function() L.planted:Set("  Ditanam   :  " .. stat.planted) end)
-    pcall(function() L.sold:Set("  Terjual   :  "    .. stat.sold) end)
-    pcall(function() L.coins:Set("  Coins +   :  "   .. stat.coinsGain) end)
-    pcall(function() L.loops:Set("  Loop      :  "   .. stat.loops) end)
-    pcall(function() L.errors:Set("  Errors    :  "  .. stat.errors) end)
-    pcall(function() L.durasi:Set(string.format("  Durasi    :  %dm %ds", math.floor(e/60), e%60)) end)
+    pcall(function() L.status:Set("  Status   : " .. (stat.running and "🟢 BERJALAN" or "🔴 BERHENTI")) end)
+    pcall(function() L.action:Set("  Aksi     : " .. stat.action) end)
+    pcall(function() L.lv:Set("  Level    : " .. getLevel() .. " | Coins: " .. getCoins()) end)
+    pcall(function() L.harvest:Set("  Dipanen  : " .. stat.harvested) end)
+    pcall(function() L.planted:Set("  Ditanam  : " .. stat.planted) end)
+    pcall(function() L.sold:Set("  Terjual  : " .. stat.sold) end)
+    pcall(function() L.coins:Set("  Coins +  : " .. stat.coinsGain) end)
+    pcall(function() L.loops:Set("  Loop     : " .. stat.loops .. " | Errors: " .. stat.errors) end)
+    pcall(function() L.durasi:Set(string.format("  Durasi   : %dm %ds", math.floor(e/60), e%60)) end)
 end
-
 local function setAction(txt) stat.action = txt; updateUI() end
 
 -- ============================
 -- CORE: BELI BIBIT
--- TutorialConfig: NPC_Bibit → INTERACT (BUY_BIBIT step)
--- LocaleConfig: NPC_BuySeeds = "Beli Bibit"
+-- Remote: GetBibit (dari screenshot RS)
+-- TutorialConfig: GET_BIBIT → INTERACT NPC_Bibit
 -- ============================
 local function buySeeds(crop)
     if not cfg.autoBuy then return end
+
+    -- Cek apakah sudah cukup
     if getSeedCount(crop.key) >= cfg.minSeedThr then return end
-    if not RE.buy then RE.buy = findRemote({"buyseed","buy","beli","purchase"}) end
 
     setAction("🛒 Beli " .. crop.icon .. " " .. crop.key)
 
     local npcObj = getNPCObj("bibit")
-    if cfg.useTP then tpTo(getNPCPos("bibit")) end
-    if npcObj then interact(npcObj, PP.buy); task.wait(cfg.actDelay) end
+    local npcPos = getNPCPos("bibit")
 
-    if RE.buy then
-        fire(RE.buy, crop.key, cfg.buyAmt)                       -- format 1
-        task.wait(cfg.actDelay * 0.4)
-        fire(RE.buy, { item=crop.key, amount=cfg.buyAmt })       -- format 2
-        task.wait(cfg.actDelay * 0.4)
-        fire(RE.buy, crop.key)                                   -- format 3
+    -- TP ke NPC_Bibit
+    if cfg.useTP and npcPos then tpTo(npcPos) end
+    task.wait(0.3)
+
+    -- Metode 1: RE GetBibit (nama pasti dari screenshot)
+    -- Format: FireServer(seedKey, amount)
+    if RE.getBibit then
+        fire(RE.getBibit, crop.key, cfg.buyAmt)
+        task.wait(cfg.actDelay * 0.5)
+        fire(RE.getBibit, { seed=crop.key, amount=cfg.buyAmt })
+        task.wait(cfg.actDelay * 0.5)
+        fire(RE.getBibit, crop.key)
         task.wait(cfg.actDelay)
+    end
+
+    -- Metode 2: RequestShop → buka UI toko, lalu ConfirmAction
+    if RE.requestShop then
+        fire(RE.requestShop, crop.key)
+        task.wait(cfg.actDelay)
+    end
+    if RE.confirmAction then
+        fire(RE.confirmAction, "Buy", crop.key, cfg.buyAmt)
+        task.wait(cfg.actDelay * 0.5)
+        fire(RE.confirmAction, crop.key, cfg.buyAmt)
+        task.wait(cfg.actDelay)
+    end
+
+    -- Metode 3: ProximityPrompt NPC langsung
+    if npcObj then
+        interact(npcObj, {"Beli Bibit", "Beli", "Buy"})
+        task.wait(cfg.actDelay)
+    end
+
+    local got = getSeedCount(crop.key)
+    if got > 0 then
+        print(string.format("[NAKA] ✅ Beli %s berhasil! Stok: %d", crop.key, got))
     else
-        warn("[NAKA] RE.buy tidak ditemukan — skip beli " .. crop.key)
+        print(string.format("[NAKA] ⚠️ Beli %s belum terkonfirmasi (stok: %d)", crop.key, got))
     end
 end
 
 -- ============================
 -- CORE: PANEN
--- TutorialConfig: HARVEST → INTERACT, Target=nil
--- LocaleConfig: HarvestAction = "Panen"
--- CropConfig: Phase[3].ModelName = "*_Fase3" = matang
+-- Remote: HarvestCrop (dari screenshot RS)
 -- ============================
 local function doHarvest()
     if not cfg.autoHarvest then return end
     setAction("🌾 Panen semua...")
 
-    -- Metode 1: global HarvestAll
-    if RE.harvest then
-        fire(RE.harvest)
+    -- Metode 1: HarvestCrop tanpa argumen (harvest all)
+    if RE.harvestCrop then
+        fire(RE.harvestCrop)
         task.wait(cfg.actDelay * 0.5)
-        fire(RE.harvest, "All")
+        fire(RE.harvestCrop, "All")
         task.wait(cfg.actDelay)
     end
 
-    -- Metode 2: scan per plot
+    -- Metode 2: scan per plot yang matang
     local function scanHarvest(parts)
         for _, part in ipairs(parts) do
             if not stat.running then break end
@@ -491,16 +496,17 @@ local function doHarvest()
 
             local target = (part.Parent and part.Parent:IsA("Model")) and part.Parent or part
 
-            if RE.harvest then
-                fire(RE.harvest, part)
+            if RE.harvestCrop then
+                fire(RE.harvestCrop, part)
                 task.wait(cfg.actDelay * 0.2)
                 if part.Parent and part.Parent:IsA("Model") then
-                    fire(RE.harvest, part.Parent)
+                    fire(RE.harvestCrop, part.Parent)
                     task.wait(cfg.actDelay * 0.2)
                 end
             end
-            interact(target, PP.harvest)
 
+            -- ProximityPrompt "Panen" (LocaleConfig: HarvestAction)
+            interact(target, {"Panen", "Harvest", "Ambil"})
             stat.harvested = stat.harvested + 1
             task.wait(cfg.actDelay * 0.3)
         end
@@ -512,29 +518,28 @@ local function doHarvest()
 end
 
 -- ============================
--- CORE: TANAM
--- TutorialConfig PLANT: "Equip bibit lalu klik area tanam"
+-- CORE: TANAM BIASA
+-- Remote: PlantCrop (dari screenshot RS)
+-- TutorialConfig: "Equip bibit lalu klik area tanam"
 -- CropConfig.ToolName = "BibitTool", "JagungTool", dst.
 -- ============================
-local function plantCrop(crop, areaParts, isBesar)
+local function plantBiasa(crop, areaParts)
     if not crop.enabled then return end
 
     local lv = getLevel()
-    if lv > 0 and lv < crop.minLevel then
-        print(string.format("[NAKA] Skip %s — butuh Lv.%d (saat ini Lv.%d)", crop.key, crop.minLevel, lv))
-        return
-    end
+    -- Level 0 artinya belum bisa dibaca, biarkan jalan
+    if lv > 0 and lv < crop.minLevel then return end
 
+    -- Pastikan ada bibit
     if getSeedCount(crop.key) < 1 then
-        buySeeds(crop); task.wait(0.5)
-        if getSeedCount(crop.key) < 1 then
-            print("[NAKA] Bibit " .. crop.key .. " habis, skip"); return
-        end
+        buySeeds(crop)
+        task.wait(0.5)
+        if getSeedCount(crop.key) < 1 then return end
     end
 
     setAction("🌱 Tanam " .. crop.icon .. " " .. crop.key)
 
-    -- Equip tool (ToolName dari CropConfig: "BibitTool", "JagungTool", dst.)
+    -- Equip tool (CropConfig.ToolName)
     local tool
     for _, tn in ipairs({ crop.toolName, crop.key, crop.key:gsub(" ","") }) do
         tool = LP.Backpack:FindFirstChild(tn)
@@ -543,80 +548,177 @@ local function plantCrop(crop, areaParts, isBesar)
     end
     if tool and Hum then pcall(function() Hum:EquipTool(tool) end); task.wait(0.25) end
 
-    -- Fire plant global
-    if RE.plant then fire(RE.plant, crop.key); task.wait(cfg.actDelay * 0.4) end
+    -- Fire PlantCrop global (server mungkin handle semua plot sekaligus)
+    if RE.plantCrop then
+        fire(RE.plantCrop, crop.key)
+        task.wait(cfg.actDelay * 0.5)
+    end
 
-    -- Scan plot kosong
+    -- Scan plot kosong & tanam satu per satu
     local planted = 0
     for _, part in ipairs(areaParts) do
         if not stat.running then break end
         if getSeedCount(crop.key) < 1 then break end
         if not isPlotEmpty(part) then continue end
-        if isBesar and not isOwnedByMe(part) then continue end  -- LahanBesar: wajib milik sendiri
 
         if cfg.useTP then tpIfFar(part.Position, 8) end
 
-        if RE.plant then
-            fire(RE.plant, crop.key, part)
+        if RE.plantCrop then
+            -- Format: (seedKey, plotPart)
+            fire(RE.plantCrop, crop.key, part)
             task.wait(cfg.actDelay * 0.2)
             if part.Parent and part.Parent:IsA("Model") then
-                fire(RE.plant, crop.key, part.Parent)
+                fire(RE.plantCrop, crop.key, part.Parent)
                 task.wait(cfg.actDelay * 0.2)
             end
         end
-        interact(part, PP.plant)
 
+        interact(part, {"Tanam", "Plant", "Semai"})
         planted = planted + 1
         stat.planted = stat.planted + 1
         task.wait(cfg.actDelay * 0.3)
     end
 
     if Hum then pcall(function() Hum:UnequipTools() end) end
-    if planted > 0 then print("[NAKA] Ditanam " .. planted .. "x " .. crop.key) end
+    if planted > 0 then print(string.format("[NAKA] ✅ Ditanam %dx %s", planted, crop.key)) end
+end
+
+-- ============================
+-- CORE: TANAM LAHAN BESAR
+-- Remote: PlantLahanCrop (dari screenshot RS — BERBEDA dari PlantCrop!)
+-- LahanBesarConfig: MaxPerPlayer=1, MaxCropsPerType=1, MaxTotalCrops=2
+-- ============================
+local function plantBesar(crop, areaParts)
+    if not crop.enabled then return end
+
+    local lv = getLevel()
+    if lv > 0 and lv < crop.minLevel then return end
+
+    if getSeedCount(crop.key) < 1 then
+        buySeeds(crop)
+        task.wait(0.5)
+        if getSeedCount(crop.key) < 1 then return end
+    end
+
+    setAction("🌴 Tanam " .. crop.icon .. " " .. crop.key .. " (Lahan Besar)")
+
+    -- Equip tool
+    local tool
+    for _, tn in ipairs({ crop.toolName, crop.key, crop.key:gsub(" ","") }) do
+        tool = LP.Backpack:FindFirstChild(tn)
+        if not tool and Char then tool = Char:FindFirstChild(tn) end
+        if tool then break end
+    end
+    if tool and Hum then pcall(function() Hum:EquipTool(tool) end); task.wait(0.25) end
+
+    -- Fire PlantLahanCrop global
+    if RE.plantLahan then
+        fire(RE.plantLahan, crop.key)
+        task.wait(cfg.actDelay * 0.5)
+    end
+
+    -- Scan lahan milik kita
+    local planted = 0
+    for _, part in ipairs(areaParts) do
+        if not stat.running then break end
+        if getSeedCount(crop.key) < 1 then break end
+        if not isPlotEmpty(part) then continue end
+        -- Lahan besar WAJIB milik kita (MaxPerPlayer=1)
+        if not isOwnedByMe(part) then continue end
+
+        if cfg.useTP then tpIfFar(part.Position, 8) end
+
+        if RE.plantLahan then
+            fire(RE.plantLahan, crop.key, part)
+            task.wait(cfg.actDelay * 0.2)
+            if part.Parent and part.Parent:IsA("Model") then
+                fire(RE.plantLahan, crop.key, part.Parent)
+                task.wait(cfg.actDelay * 0.2)
+            end
+        end
+
+        interact(part, {"Tanam", "Plant"})
+        planted = planted + 1
+        stat.planted = stat.planted + 1
+        task.wait(cfg.actDelay * 0.3)
+    end
+
+    if Hum then pcall(function() Hum:UnequipTools() end) end
+    if planted > 0 then print(string.format("[NAKA] ✅ Ditanam %dx %s (Lahan Besar)", planted, crop.key)) end
 end
 
 local function doPlant()
     if not cfg.autoPlant then return end
     local biasaParts = getAreaTanamParts()
     local besarParts = getAreaBesarParts()
+
     for _, crop in ipairs(CROPS_BIASA) do
         if not stat.running then break end
-        pcall(plantCrop, crop, biasaParts, false); task.wait(cfg.actDelay * 0.4)
+        pcall(plantBiasa, crop, biasaParts)
+        task.wait(cfg.actDelay * 0.3)
     end
     for _, crop in ipairs(CROPS_BESAR) do
         if not stat.running then break end
-        pcall(plantCrop, crop, besarParts, true); task.wait(cfg.actDelay * 0.4)
+        pcall(plantBesar, crop, besarParts)
+        task.wait(cfg.actDelay * 0.3)
     end
 end
 
 -- ============================
 -- CORE: JUAL
--- TutorialConfig GO_SELL: Target="NPC_Penjual"
+-- Remote: SellCrop + RequestSell (dari screenshot RS)
 -- LocaleConfig: NPC_SellCrops="Jual Hasil Panen", NPC_SellSawit="Jual Sawit"
--- SellableItems: Padi=10, Jagung=20, Tomat=30, Terong=50, Strawberry=75, Sawit=1500
 -- ============================
 local function doSell()
     if not cfg.autoSell then return end
-    if not RE.sell then RE.sell = findRemote({"sellitem","sellall","jual","sell"}) end
 
     -- Jual hasil biasa → NPC_Penjual
     setAction("💰 Jual ke NPC_Penjual...")
     local npcPenjual = getNPCObj("penjual")
-    if cfg.useTP then tpTo(getNPCPos("penjual")) end
-    if npcPenjual then interact(npcPenjual, PP.sell); task.wait(cfg.actDelay) end
-    if RE.sell then
-        fire(RE.sell); task.wait(cfg.actDelay * 0.4)
-        fire(RE.sell, "All"); task.wait(cfg.actDelay)
+    local posPenjual = getNPCPos("penjual")
+    if cfg.useTP and posPenjual then tpTo(posPenjual) end
+    task.wait(0.3)
+
+    -- Buka UI jual dulu
+    if RE.requestSell then
+        fire(RE.requestSell)
+        task.wait(cfg.actDelay)
+    end
+    -- Jual semua
+    if RE.sellCrop then
+        fire(RE.sellCrop)
+        task.wait(cfg.actDelay * 0.4)
+        fire(RE.sellCrop, "All")
+        task.wait(cfg.actDelay * 0.4)
+        -- Jual per item
+        for _, c in ipairs(CROPS_BIASA) do
+            fire(RE.sellCrop, c.harvestItem)
+            task.wait(0.15)
+        end
+        task.wait(cfg.actDelay)
+    end
+    if npcPenjual then
+        interact(npcPenjual, {"Jual Hasil Panen", "Jual Semua", "Jual", "Sell All", "Sell"})
+        task.wait(cfg.actDelay)
     end
 
-    -- Jual Sawit/Durian → NPC_PedagangSawit (CustomHarvest)
-    setAction("🌴 Jual ke NPC_PedagangSawit...")
+    -- Jual Sawit/Durian → NPC_PedagangSawit
+    setAction("🌴 Jual Sawit/Durian...")
     local npcSawit = getNPCObj("sawit")
-    if cfg.useTP then tpTo(getNPCPos("sawit")) end
-    if npcSawit then interact(npcSawit, PP.sellSawit); task.wait(cfg.actDelay) end
-    if RE.sell then
-        fire(RE.sell, "Sawit"); task.wait(cfg.actDelay * 0.4)
-        fire(RE.sell, "Durian"); task.wait(cfg.actDelay)
+    local posSawit = getNPCPos("sawit")
+    if cfg.useTP and posSawit then tpTo(posSawit) end
+    task.wait(0.3)
+
+    if RE.requestSell then fire(RE.requestSell, "Sawit"); task.wait(cfg.actDelay) end
+    if RE.sellCrop then
+        fire(RE.sellCrop, "Sawit")
+        task.wait(cfg.actDelay * 0.4)
+        fire(RE.sellCrop, "Durian")
+        task.wait(cfg.actDelay)
+    end
+    if npcSawit then
+        interact(npcSawit, {"Jual Sawit", "Jual Buah", "Sell Palm"})
+        task.wait(cfg.actDelay)
     end
 
     stat.sold = stat.sold + 1
@@ -637,7 +739,7 @@ local function farmLoop()
 
     Rayfield:Notify({
         Title   = "🌾 Auto Farm Aktif!",
-        Content = "NAKA v4.0 — Data akurat dari game config!",
+        Content = "v5.0 — Remote names akurat dari game!\nLevel: " .. getLevel(),
         Duration = 4, Image = 4483362458
     })
 
@@ -645,29 +747,32 @@ local function farmLoop()
         stat.loops = stat.loops + 1
 
         -- 1. Panen
-        if not pcall(doHarvest) then stat.errors += 1 end
+        local okH = pcall(doHarvest)
+        if not okH then stat.errors += 1 end
         if not stat.running then break end
         task.wait(cfg.actDelay)
 
         -- 2. Jual (opsional)
         if cfg.autoSell then
-            if not pcall(doSell) then stat.errors += 1 end
+            local okS = pcall(doSell)
+            if not okS then stat.errors += 1 end
             if not stat.running then break end
             task.wait(cfg.actDelay)
         end
 
         -- 3. Tanam
-        if not pcall(doPlant) then stat.errors += 1 end
+        local okP = pcall(doPlant)
+        if not okP then stat.errors += 1 end
         if not stat.running then break end
         task.wait(cfg.actDelay)
 
-        -- 4. Coin tracking
+        -- 4. Coin tracker
         local cur = getCoins()
         if cur > stat.lastCoins then stat.coinsGain += (cur - stat.lastCoins) end
         stat.lastCoins = cur
 
-        -- 5. Tunggu antar loop
-        setAction(string.format("⏳ Tunggu %ds... (loop #%d)", cfg.loopDelay, stat.loops))
+        -- 5. Tunggu
+        setAction(string.format("⏳ Tunggu %ds... (loop #%d | Lv.%d)", cfg.loopDelay, stat.loops, getLevel()))
         local w = 0
         while w < cfg.loopDelay and stat.running do task.wait(0.5); w += 0.5 end
     end
@@ -675,15 +780,14 @@ local function farmLoop()
     setAction("⏹ Dihentikan")
     Rayfield:Notify({
         Title   = "⏹ Auto Farm Stop",
-        Content = string.format("Panen: %d | Tanam: %d | Loop: %d | Error: %d",
-            stat.harvested, stat.planted, stat.loops, stat.errors),
+        Content = string.format("Panen: %d | Tanam: %d | Loop: %d", stat.harvested, stat.planted, stat.loops),
         Duration = 5, Image = 4483362458
     })
 end
 
 local function startFarm()
     if stat.running then return end
-    stat.running  = true
+    stat.running   = true
     stat.harvested = 0; stat.planted = 0; stat.sold = 0
     stat.coinsGain = 0; stat.loops = 0; stat.errors = 0
     updateUI()
@@ -699,21 +803,17 @@ end
 -- ============================
 -- ANTI-AFK
 -- ============================
-local afkThread
-local function startAntiAFK()
-    if afkThread then return end
-    afkThread = task.spawn(function()
-        while true do
-            task.wait(58)
-            if not stat.running and cfg.antiAFK and Root and Root.Parent then
-                local cf = Root.CFrame
-                Root.CFrame = cf * CFrame.new(0, 0, 0.4)
-                task.wait(0.3)
-                Root.CFrame = cf
-            end
+task.spawn(function()
+    while true do
+        task.wait(58)
+        if not stat.running and cfg.antiAFK and Root and Root.Parent then
+            local cf = Root.CFrame
+            Root.CFrame = cf * CFrame.new(0, 0, 0.4)
+            task.wait(0.3)
+            Root.CFrame = cf
         end
-    end)
-end
+    end
+end)
 
 -- Level-up watcher
 spawnThread(function()
@@ -727,7 +827,7 @@ spawnThread(function()
                     Content = "Level " .. stat.lastLv .. " → " .. lv .. " 🎉",
                     Duration = 7, Image = 4483362458
                 })
-                print("[NAKA] Level up! " .. stat.lastLv .. " → " .. lv)
+                print("[NAKA] ⭐ Level up! " .. stat.lastLv .. " → " .. lv)
             end
             stat.lastLv = lv
         end
@@ -745,40 +845,40 @@ end)
 local Win = Rayfield:CreateWindow({
     Name                = "🌾  NAKA AUTO FARM  |  Sawah Indo",
     LoadingTitle        = "🌾  N A K A  A U T O  F A R M",
-    LoadingSubtitle     = "[ v4.0  •  Data Akurat dari Game Config ]",
-    ConfigurationSaving = { Enabled=true, FolderName="NAKA", FileName="AutoFarm_v4" },
+    LoadingSubtitle     = "[ v5.0  •  Remote Names 100% Akurat ]",
+    ConfigurationSaving = { Enabled=true, FolderName="NAKA", FileName="AutoFarm_v5" },
     Discord             = { Enabled=false },
     KeySystem           = false,
 })
 Rayfield:LoadConfiguration()
 
 Rayfield:Notify({
-    Title   = "🌾 NAKA Auto Farm v4.0",
-    Content = "Data akurat dari decompile!\nPlant:" .. (RE.plant and "✅" or "⏳")
-        .. " Harvest:" .. (RE.harvest and "✅" or "⏳")
-        .. " Buy:" .. (RE.buy and "✅" or "⏳"),
-    Duration = 5, Image = 4483362458
+    Title   = "🌾 NAKA Auto Farm v5.0",
+    Content = "GetBibit:" .. (RE.getBibit and "✅" or "❌")
+        .. " HarvestCrop:" .. (RE.harvestCrop and "✅" or "❌")
+        .. "\nPlantCrop:" .. (RE.plantCrop and "✅" or "❌")
+        .. " SellCrop:" .. (RE.sellCrop and "✅" or "❌"),
+    Duration = 6, Image = 4483362458
 })
 
 -- ─── TAB 1: FARM ─────────────────────────────────────────
 local T1 = Win:CreateTab("🌾  Farm", 4483362458)
 
 T1:CreateSection("◈  Status Real-Time")
-L.status  = T1:CreateLabel("  Status    :  🔴 BERHENTI")
-L.action  = T1:CreateLabel("  Aksi      :  ⏹ Standby")
-L.harvest = T1:CreateLabel("  Dipanen   :  0")
-L.planted = T1:CreateLabel("  Ditanam   :  0")
-L.sold    = T1:CreateLabel("  Terjual   :  0")
-L.coins   = T1:CreateLabel("  Coins +   :  0")
-L.loops   = T1:CreateLabel("  Loop      :  0")
-L.errors  = T1:CreateLabel("  Errors    :  0")
-L.durasi  = T1:CreateLabel("  Durasi    :  0m 0s")
+L.status  = T1:CreateLabel("  Status   : 🔴 BERHENTI")
+L.action  = T1:CreateLabel("  Aksi     : ⏹ Standby")
+L.lv      = T1:CreateLabel("  Level    : -")
+L.harvest = T1:CreateLabel("  Dipanen  : 0")
+L.planted = T1:CreateLabel("  Ditanam  : 0")
+L.sold    = T1:CreateLabel("  Terjual  : 0")
+L.coins   = T1:CreateLabel("  Coins +  : 0")
+L.loops   = T1:CreateLabel("  Loop     : 0 | Errors: 0")
+L.durasi  = T1:CreateLabel("  Durasi   : 0m 0s")
 
 T1:CreateSection("◈  Kontrol Utama")
 T1:CreateButton({ Name="▶  Mulai Auto Farm", Callback=startFarm })
 T1:CreateButton({ Name="⏹  Stop Auto Farm",  Callback=stopFarm  })
-T1:CreateToggle({ Name="📍  Teleport Mode", CurrentValue=true,
-    Callback=function(v) cfg.useTP = v end })
+T1:CreateToggle({ Name="📍  Teleport Mode", CurrentValue=true, Callback=function(v) cfg.useTP=v end })
 
 T1:CreateSection("◈  Aksi Manual")
 T1:CreateButton({ Name="🌾  Panen Sekarang",    Callback=function() spawnThread(doHarvest) end })
@@ -788,28 +888,30 @@ T1:CreateButton({ Name="💰  Jual Sekarang",
         local old = cfg.autoSell; cfg.autoSell = true
         spawnThread(function() pcall(doSell); cfg.autoSell = old end)
     end })
+T1:CreateButton({ Name="🛒  Beli Bibit Padi Sekarang",
+    Callback=function() spawnThread(function() buySeeds(CROPS_BIASA[1]) end) end })
 
 -- ─── TAB 2: TANAMAN ──────────────────────────────────────
 local T2 = Win:CreateTab("🌱  Tanaman", 4483362458)
 
-T2:CreateSection("◈  Tanaman Biasa  (workspace.AreaTanam)")
+T2:CreateSection("◈  Tanaman Biasa  (PlantCrop → AreaTanam)")
 for _, c in ipairs(CROPS_BIASA) do
     local crop = c
     T2:CreateToggle({
-        Name         = string.format("%s  %s  [Lv.%d]  Jual %d/ea  |  Panen x%d",
+        Name         = string.format("%s  %s  [Lv.%d]  💰%d/ea  ×%d",
             crop.icon, crop.key, crop.minLevel, crop.sellPrice, crop.harvestAmt),
         CurrentValue = true,
         Callback     = function(v) crop.enabled = v end
     })
 end
 
-T2:CreateSection("◈  Lahan Besar  (AreaTanamBesar 1-28)")
-T2:CreateLabel("  Max 1 lahan per player | Max 2 tanaman | Klaim: 100.000 coins")
-T2:CreateLabel("  MaxCropsPerType=1: 1 Sawit + 1 Durian saja!")
+T2:CreateSection("◈  Lahan Besar  (PlantLahanCrop → AreaTanamBesar 1-28)")
+T2:CreateLabel("  Perlu klaim lahan sendiri! Max 1 lahan, 2 tanaman total")
+T2:CreateLabel("  MaxCropsPerType=1: max 1 Sawit + 1 Durian")
 for _, c in ipairs(CROPS_BESAR) do
     local crop = c
     T2:CreateToggle({
-        Name         = string.format("%s  %s  [Lv.%d]  CustomHarvest  |  Panen x%d",
+        Name         = string.format("%s  %s  [Lv.%d]  CustomHarvest  ×%d",
             crop.icon, crop.key, crop.minLevel, crop.harvestAmt),
         CurrentValue = true,
         Callback     = function(v) crop.enabled = v end
@@ -826,13 +928,13 @@ T2:CreateToggle({ Name="💰  Auto Jual  (default OFF)", CurrentValue=false, Cal
 local T3 = Win:CreateTab("⚙  Settings", 4483362458)
 
 T3:CreateSection("◈  Timing")
-T3:CreateSlider({ Name="⏱  Delay Aksi (×0.1s)", Range={1,20}, Increment=1, CurrentValue=4,
+T3:CreateSlider({ Name="⏱  Delay Aksi (×0.1s)", Range={1,20}, Increment=1, CurrentValue=5,
     Callback=function(v) cfg.actDelay = v * 0.1 end })
-T3:CreateSlider({ Name="🔁  Delay Loop (detik)", Range={1,60}, Increment=1, CurrentValue=3,
+T3:CreateSlider({ Name="🔁  Delay Loop (detik)", Range={1,60}, Increment=1, CurrentValue=5,
     Callback=function(v) cfg.loopDelay = v end })
 T3:CreateSlider({ Name="🛒  Jumlah Beli Bibit", Range={10,200}, Increment=10, CurrentValue=50,
     Callback=function(v) cfg.buyAmt = v end })
-T3:CreateSlider({ Name="📦  Threshold Beli (beli kalau <)", Range={1,50}, Increment=1, CurrentValue=5,
+T3:CreateSlider({ Name="📦  Threshold Beli (beli jika < ini)", Range={1,50}, Increment=1, CurrentValue=5,
     Callback=function(v) cfg.minSeedThr = v end })
 
 T3:CreateSection("◈  Sistem")
@@ -842,33 +944,26 @@ T3:CreateToggle({ Name="🛡  Anti-AFK",       CurrentValue=true, Callback=funct
 -- ─── TAB 4: DEBUG ────────────────────────────────────────
 local T4 = Win:CreateTab("🔍  Debug", 4483362458)
 
-T4:CreateSection("◈  Remote Events")
+T4:CreateSection("◈  Remote Events (nama pasti dari RS)")
 T4:CreateButton({ Name="🔄  Refresh & Cek Remotes", Callback=function()
-    buildRemoteMap(); detectRemotes(); logRemotes()
-    local names = {"Plant","Harvest","Buy","Sell"}
-    local remotes = {RE.plant, RE.harvest, RE.buy, RE.sell}
-    for i, name in ipairs(names) do
+    retryRemotes(); logRemotes()
+    local checks = {
+        {"GetBibit",       RE.getBibit},
+        {"HarvestCrop",    RE.harvestCrop},
+        {"PlantCrop",      RE.plantCrop},
+        {"PlantLahanCrop", RE.plantLahan},
+        {"SellCrop",       RE.sellCrop},
+        {"RequestSell",    RE.requestSell},
+        {"RequestShop",    RE.requestShop},
+    }
+    for _, v in ipairs(checks) do
         Rayfield:Notify({
-            Title   = "RE." .. name,
-            Content = remotes[i] and ("✅ " .. remotes[i]:GetFullName()) or "❌ Tidak ditemukan",
-            Duration = 3, Image = 4483362458
+            Title   = v[1],
+            Content = v[2] and ("✅ " .. v[2]:GetFullName()) or "❌ Tidak ditemukan",
+            Duration = 2, Image = 4483362458
         })
-        task.wait(0.4)
+        task.wait(0.3)
     end
-end })
-
-T4:CreateButton({ Name="📋  Scan Semua RemoteEvent", Callback=function()
-    local count = 0
-    for _, obj in ipairs(RS:GetDescendants()) do
-        if obj:IsA("RemoteEvent") then
-            count += 1; print("[SCAN] " .. obj:GetFullName())
-        end
-    end
-    Rayfield:Notify({
-        Title   = "📋 Scan Selesai",
-        Content = count .. " RemoteEvent\nCek Console F9",
-        Duration = 4, Image = 4483362458
-    })
 end })
 
 T4:CreateSection("◈  NPC & Area")
@@ -878,7 +973,7 @@ T4:CreateButton({ Name="📍  Cek Semua NPC", Callback=function()
         Rayfield:Notify({
             Title   = name,
             Content = pos and string.format("✅ %.0f, %.0f, %.0f", pos.X, pos.Y, pos.Z)
-                or "❌ Tidak ditemukan — cek workspace.NPCs",
+                or "❌ Tidak ditemukan — cek workspace." .. NPC_FOLDER,
             Duration = 3, Image = 4483362458
         })
         task.wait(0.4)
@@ -895,73 +990,72 @@ T4:CreateButton({ Name="🌾  Cek Area Tanam", Callback=function()
     })
 end })
 
-T4:CreateButton({ Name="📦  Cek Stok Bibit", Callback=function()
-    local lines = {}
+T4:CreateButton({ Name="📦  Cek Stok Bibit + Level", Callback=function()
+    local lv = getLevel()
+    local lines = {string.format("Level: %d | Coins: %d", lv, getCoins()), ""}
     for _, c in ipairs(CROPS_BIASA) do
-        table.insert(lines, c.icon .. " " .. c.key .. ": " .. getSeedCount(c.key))
+        local unlocked = lv >= c.minLevel
+        table.insert(lines, string.format("%s %s: %d %s",
+            c.icon, c.key, getSeedCount(c.key), unlocked and "✅" or ("🔒Lv."..c.minLevel)))
     end
     for _, c in ipairs(CROPS_BESAR) do
-        table.insert(lines, c.icon .. " " .. c.key .. ": " .. getSeedCount(c.key))
+        local unlocked = lv >= c.minLevel
+        table.insert(lines, string.format("%s %s: %d %s",
+            c.icon, c.key, getSeedCount(c.key), unlocked and "✅" or ("🔒Lv."..c.minLevel)))
     end
-    for _, l in ipairs(lines) do print("[INV] " .. l) end
+    for _, l in ipairs(lines) do print("[NAKA] " .. l) end
     Rayfield:Notify({
-        Title   = "📦 Stok Bibit",
+        Title   = "📦 Stok & Level",
         Content = table.concat(lines, "\n"),
-        Duration = 6, Image = 4483362458
+        Duration = 8, Image = 4483362458
     })
 end })
 
-T4:CreateButton({ Name="📊  Info Player", Callback=function()
-    Rayfield:Notify({
-        Title   = "📊 Player Info",
-        Content = string.format("Level: %d\nCoins: %d", getLevel(), getCoins()),
-        Duration = 4, Image = 4483362458
-    })
+T4:CreateButton({ Name="🧪  Test GetBibit (beli 1 Bibit Padi)", Callback=function()
+    spawnThread(function()
+        local before = getSeedCount("Bibit Padi")
+        fire(RE.getBibit, "Bibit Padi", 1)
+        task.wait(1)
+        local after = getSeedCount("Bibit Padi")
+        Rayfield:Notify({
+            Title   = "🧪 Test GetBibit",
+            Content = string.format("Sebelum: %d | Sesudah: %d\n%s",
+                before, after, after > before and "✅ Berhasil!" or "❌ Tidak berubah"),
+            Duration = 5, Image = 4483362458
+        })
+    end)
 end })
 
 -- ─── TAB 5: INFO ─────────────────────────────────────────
 local T5 = Win:CreateTab("📋  Info", 4483362458)
 
-T5:CreateSection("◈  Cara Pakai")
-T5:CreateLabel("1️⃣   Selesaikan tutorial game terlebih dahulu!")
-T5:CreateLabel("2️⃣   Tab 🌱 Tanaman — aktifkan sesuai level kamu")
-T5:CreateLabel("3️⃣   Tab 🔍 Debug — pastikan Remote & NPC ✅")
-T5:CreateLabel("4️⃣   Tab 🌾 Farm → klik ▶ Mulai Auto Farm")
-T5:CreateLabel("5️⃣   Auto Jual default OFF — aktifkan di tab Tanaman")
+T5:CreateSection("◈  Remote Events (dari screenshot RS)")
+T5:CreateLabel("🔵 GetBibit       — beli bibit dari NPC_Bibit")
+T5:CreateLabel("🔵 HarvestCrop    — panen tanaman")
+T5:CreateLabel("🔵 PlantCrop      — tanam di AreaTanam")
+T5:CreateLabel("🔵 PlantLahanCrop — tanam di AreaTanamBesar")
+T5:CreateLabel("🔵 SellCrop       — jual hasil panen")
+T5:CreateLabel("🔵 RequestSell    — buka UI jual")
+T5:CreateLabel("🔵 RequestShop    — buka UI toko bibit")
+T5:CreateLabel("🔵 RequestLahan   — klaim lahan besar")
 
-T5:CreateSection("◈  Tanaman & Harga Jual (CropConfig + SellableItems)")
-T5:CreateLabel("🌾  Bibit Padi       Lv.1   | 50-60s    | 🛒5 💰10/ea  | x1")
-T5:CreateLabel("🌽  Bibit Jagung     Lv.20  | 80-100s   | 🛒15 💰20/ea | x2")
-T5:CreateLabel("🍅  Bibit Tomat      Lv.40  | 120-150s  | 🛒25 💰30/ea | x3")
-T5:CreateLabel("🍆  Bibit Terong     Lv.60  | 150-200s  | 🛒40 💰50/ea | x4")
-T5:CreateLabel("🍓  Bibit Strawberry Lv.80  | 180-250s  | 🛒60 💰75/ea | x4")
-T5:CreateLabel("🌴  Bibit Sawit      Lv.80  | 600-1000s | 🛒1000 💰1500| x4")
-T5:CreateLabel("🍈  Bibit Durian     Lv.120 | 800-1200s | 🛒2000 CustomHarvest")
-
-T5:CreateSection("◈  NPC (WorldConfig: folder NPCs)")
-T5:CreateLabel("🛒  NPC_Bibit         — Pak Tani  (Beli Bibit)")
-T5:CreateLabel("💰  NPC_Penjual       — Pedagang  (Jual Hasil Panen)")
-T5:CreateLabel("🌴  NPC_PedagangSawit — Pedagang Sawit/Durian")
-T5:CreateLabel("🔨  NPC_Alat          — Toko Alat (tool permanen)")
-
-T5:CreateSection("◈  Lahan Besar (LahanBesarConfig)")
-T5:CreateLabel("🏕  AreaTanamBesar1 .. AreaTanamBesar28")
-T5:CreateLabel("💰  Harga klaim lahan: 100.000 coins")
-T5:CreateLabel("🌱  MaxPerPlayer: 1 lahan")
-T5:CreateLabel("🚫  MaxCropsPerType: 1 | MaxTotalCrops: 2")
-T5:CreateLabel("📌  Bibit Sawit & Durian HANYA di lahan sendiri!")
+T5:CreateSection("◈  Data Tanaman (CropConfig + SellableItems)")
+T5:CreateLabel("🌾 Bibit Padi       Lv.1   | 50-60s    | 🛒5   💰10/ea | ×1")
+T5:CreateLabel("🌽 Bibit Jagung     Lv.20  | 80-100s   | 🛒15  💰20/ea | ×2")
+T5:CreateLabel("🍅 Bibit Tomat      Lv.40  | 120-150s  | 🛒25  💰30/ea | ×3")
+T5:CreateLabel("🍆 Bibit Terong     Lv.60  | 150-200s  | 🛒40  💰50/ea | ×4")
+T5:CreateLabel("🍓 Bibit Strawberry Lv.80  | 180-250s  | 🛒60  💰75/ea | ×4")
+T5:CreateLabel("🌴 Bibit Sawit      Lv.80  | 600-1000s | 🛒1000 💰1500 | ×4")
+T5:CreateLabel("🍈 Bibit Durian     Lv.120 | 800-1200s | 🛒2000 CustomHarvest")
 
 T5:CreateSection("◈  Tentang")
-T5:CreateLabel("🌾  NAKA Auto Farm v4.0 — Sawah Indo")
-T5:CreateLabel("   Dari: CropConfig, LahanBesarConfig,")
-T5:CreateLabel("         TutorialConfig, LocaleConfig")
+T5:CreateLabel("🌾  NAKA Auto Farm v5.0 — Sawah Indo")
+T5:CreateLabel("   Remote names 100% dari ReplicatedStorage")
 
 -- ============================
 -- INIT
 -- ============================
-startAntiAFK()
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("  🌾 NAKA AUTO FARM v4.0 — SAWAH INDO 🌾")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("  🌾 NAKA AUTO FARM v5.0 — SAWAH INDO 🌾")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 logRemotes()
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
